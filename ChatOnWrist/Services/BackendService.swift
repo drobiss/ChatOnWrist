@@ -215,6 +215,10 @@ struct TestChatRequest: Codable {
     let message: String
 }
 
+struct TestChatRequest: Codable {
+    let message: String
+}
+
 struct ChatResponse: Codable {
     let response: String
     let conversationId: String
