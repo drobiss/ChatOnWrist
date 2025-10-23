@@ -9,7 +9,6 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var conversationStore = ConversationStore()
-    @StateObject private var openAIService = OpenAIService(apiKey: AppConfig.openAIAPIKey)
     @StateObject private var authService = AuthenticationService()
     @StateObject private var watchConnectivity = WatchConnectivityService()
     
@@ -17,7 +16,6 @@ struct ContentView: View {
         if authService.deviceToken != nil {
             WatchHomeView()
                 .environmentObject(conversationStore)
-                .environmentObject(openAIService)
                 .environmentObject(authService)
                 .environmentObject(watchConnectivity)
         } else {

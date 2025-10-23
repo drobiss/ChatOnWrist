@@ -10,7 +10,6 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var authService = AuthenticationService()
     @StateObject private var conversationStore = ConversationStore()
-    @StateObject private var openAIService = OpenAIService(apiKey: AppConfig.openAIAPIKey)
     @StateObject private var watchConnectivity = WatchConnectivityService()
     
     var body: some View {
@@ -18,7 +17,6 @@ struct ContentView: View {
             MainTabView()
                 .environmentObject(authService)
                 .environmentObject(conversationStore)
-                .environmentObject(openAIService)
                 .environmentObject(watchConnectivity)
         } else {
             LoginView()

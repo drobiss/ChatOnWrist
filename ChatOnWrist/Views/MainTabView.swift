@@ -42,6 +42,5 @@ struct MainTabView: View {
     MainTabView()
         .environmentObject(ConversationStore())
         .environmentObject(AuthenticationService())
-        .environmentObject(OpenAIService(apiKey: ""))
 }
 

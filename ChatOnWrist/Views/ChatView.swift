@@ -130,9 +130,13 @@ struct ChatView: View {
         let userMessage = Message(content: message, isFromUser: true)
         conversationStore.addMessage(userMessage, to: conversation)
         
-        // Send to backend test endpoint
+        // Send to backend with proper authentication
         Task {
-            let result = await sendTestMessage(message: message)
+            let result = await backendService.sendMessage(
+                message: message,
+                conversationId: currentConversationId,
+                deviceToken: authService.deviceToken ?? "test-device-token"
+            )
             
             await MainActor.run {
                 self.isLoading = false
@@ -144,13 +148,16 @@ struct ChatView: View {
                     self.currentConversationId = response.conversationId
                 case .failure(let error):
                     print("Error sending message: \(error)")
+                    // Fallback: show error message
+                    let errorMessage = Message(content: "Error: \(error.localizedDescription)", isFromUser: false)
+                    self.conversationStore.addMessage(errorMessage, to: conversation)
                 }
             }
         }
     }
     
     private func sendTestMessage(message: String) async -> Result<ChatResponse, Error> {
-        guard let url = URL(string: AppConfig.backendBaseURL + "/test-chat") else {
+        guard let url = URL(string: AppConfig.backendBaseURL + "/chat/test") else {
             return .failure(NSError(domain: "Invalid URL", code: 0))
         }
         

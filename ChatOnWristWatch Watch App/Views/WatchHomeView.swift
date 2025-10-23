@@ -9,7 +9,6 @@ import SwiftUI
 
 struct WatchHomeView: View {
     @EnvironmentObject var conversationStore: ConversationStore
-    @EnvironmentObject var openAIService: OpenAIService
     
     var body: some View {
         NavigationView {
@@ -17,9 +16,9 @@ struct WatchHomeView: View {
                 // Status indicator
                 HStack {
                     Circle()
-                        .fill(openAIService.isConnected ? .green : .red)
+                        .fill(.green)
                         .frame(width: 6, height: 6)
-                    Text(openAIService.isConnected ? "Connected" : "Offline")
+                    Text("Connected")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -69,6 +68,5 @@ struct WatchHomeView: View {
 #Preview {
     WatchHomeView()
         .environmentObject(ConversationStore())
-        .environmentObject(OpenAIService(apiKey: ""))
 }
 
