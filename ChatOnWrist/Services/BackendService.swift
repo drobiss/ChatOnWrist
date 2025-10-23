@@ -84,6 +84,13 @@ class BackendService: ObservableObject {
         
         return await makeRequest(endpoint: endpoint, method: "POST", body: request, authToken: deviceToken)
     }
+
+    func sendTestMessage(message: String) async -> Result<ChatResponse, BackendError> {
+        let endpoint = "/chat/test"
+        let request = TestChatRequest(message: message)
+
+        return await makeRequest(endpoint: endpoint, method: "POST", body: request)
+    }
     
     func getConversations(deviceToken: String) async -> Result<[ConversationResponse], BackendError> {
         let endpoint = "/chat/conversations"
@@ -202,6 +209,10 @@ struct DevicePairResponse: Codable {
 struct ChatRequest: Codable {
     let message: String
     let conversationId: String?
+}
+
+struct TestChatRequest: Codable {
+    let message: String
 }
 
 struct ChatResponse: Codable {

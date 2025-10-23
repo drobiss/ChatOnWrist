@@ -118,7 +118,7 @@ struct ConversationDetailView: View {
         let currentText = messageText
         messageText = ""
         
-        // Send to backend test endpoint
+        // Send via backend test endpoint for now
         Task {
             let result = await sendTestMessage(message: currentText)
             
@@ -134,39 +134,20 @@ struct ConversationDetailView: View {
                     speakText(response.response)
                     
                 case .failure(let error):
-                    print("Error: \(error.localizedDescription)")
+                    let errorMessage = Message(content: "Error: \(error.localizedDescription)", isFromUser: false)
+                    conversationStore.addMessage(errorMessage, to: conversation)
                 }
             }
         }
     }
     
     private func sendTestMessage(message: String) async -> Result<ChatResponse, Error> {
-        guard let url = URL(string: AppConfig.backendBaseURL + "/chat/test") else {
-            return .failure(NSError(domain: "Invalid URL", code: 0))
-        }
+        let result = await backendService.sendTestMessage(message: message)
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let body = ["message": message]
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        } catch {
-            return .failure(error)
-        }
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                return .failure(NSError(domain: "Server error", code: 0))
-            }
-            
-            let chatResponse = try JSONDecoder().decode(ChatResponse.self, from: data)
-            return .success(chatResponse)
-        } catch {
+        switch result {
+        case .success(let response):
+            return .success(response)
+        case .failure(let error):
             return .failure(error)
         }
     }
