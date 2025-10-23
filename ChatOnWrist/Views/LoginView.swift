@@ -30,9 +30,7 @@ struct LoginView: View {
             
             Button("Sign in with Apple") {
                 print("Sign in button tapped!")
-                // For testing, just set authenticated to true
-                authService.isAuthenticated = true
-                authService.userAccessToken = "test_token"
+                authenticateWithApple()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -42,6 +40,18 @@ struct LoginView: View {
             Spacer()
         }
         .padding()
+    }
+    
+    private func authenticateWithApple() {
+        // For now, simulate successful authentication
+        // In a real app, you'd use SignInWithAppleButton
+        Task {
+            await MainActor.run {
+                authService.isAuthenticated = true
+                authService.userAccessToken = "mock_user_token_\(UUID().uuidString)"
+                authService.deviceToken = "mock_device_token_\(UUID().uuidString)"
+            }
+        }
     }
 }
 

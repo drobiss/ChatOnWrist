@@ -26,13 +26,6 @@ class BackendService: ObservableObject {
     // MARK: - Connection Testing
     
     func testConnection() async {
-        // For testing, simulate successful connection
-        await MainActor.run {
-            self.isConnected = true
-            self.errorMessage = nil
-            self.lastConnectionTest = Date()
-        }
-        return
         
         guard let url = URL(string: baseURL + "/health") else {
             await MainActor.run {

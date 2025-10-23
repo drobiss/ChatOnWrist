@@ -40,6 +40,43 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Test chat endpoint (no auth required for testing)
+app.post('/test-chat', async (req, res) => {
+    try {
+        const { message } = req.body;
+        
+        if (!message) {
+            return res.status(400).json({ error: 'Message is required' });
+        }
+        
+        // Call OpenAI API
+        const axios = require('axios');
+        const openaiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: 'gpt-4o',
+            messages: [{ role: 'user', content: message }],
+            max_tokens: 150,
+            temperature: 0.7
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const aiResponse = openaiResponse.data.choices[0].message.content;
+        
+        res.json({
+            response: aiResponse,
+            conversationId: 'test-conversation',
+            messageId: 'test-message'
+        });
+        
+    } catch (error) {
+        console.error('Test chat error:', error);
+        res.status(500).json({ error: 'Failed to process message' });
+    }
+});
+
 // API routes
 app.use('/auth', authRoutes);
 app.use('/device', deviceRoutes);

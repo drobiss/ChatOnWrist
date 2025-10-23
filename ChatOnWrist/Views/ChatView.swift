@@ -8,9 +8,9 @@
 import SwiftUI
 
 struct ChatView: View {
+    @EnvironmentObject var authService: AuthenticationService
     @StateObject private var conversationStore = ConversationStore()
     @StateObject private var speechService = SpeechService()
-    @StateObject private var openAIService = OpenAIService(apiKey: AppConfig.openAIAPIKey)
     @StateObject private var backendService = BackendService()
     
     @State private var messageText = ""
@@ -130,19 +130,53 @@ struct ChatView: View {
         let userMessage = Message(content: message, isFromUser: true)
         conversationStore.addMessage(userMessage, to: conversation)
         
-        // Send to OpenAI
-        openAIService.sendMessage(message) { result in
-            DispatchQueue.main.async {
+        // Send to backend test endpoint
+        Task {
+            let result = await sendTestMessage(message: message)
+            
+            await MainActor.run {
                 self.isLoading = false
                 
                 switch result {
                 case .success(let response):
-                    let aiMessage = Message(content: response, isFromUser: false)
+                    let aiMessage = Message(content: response.response, isFromUser: false)
                     self.conversationStore.addMessage(aiMessage, to: conversation)
+                    self.currentConversationId = response.conversationId
                 case .failure(let error):
                     print("Error sending message: \(error)")
                 }
             }
+        }
+    }
+    
+    private func sendTestMessage(message: String) async -> Result<ChatResponse, Error> {
+        guard let url = URL(string: AppConfig.backendBaseURL + "/test-chat") else {
+            return .failure(NSError(domain: "Invalid URL", code: 0))
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body = ["message": message]
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        } catch {
+            return .failure(error)
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                return .failure(NSError(domain: "Server error", code: 0))
+            }
+            
+            let chatResponse = try JSONDecoder().decode(ChatResponse.self, from: data)
+            return .success(chatResponse)
+        } catch {
+            return .failure(error)
         }
     }
     
