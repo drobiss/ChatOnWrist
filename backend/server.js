@@ -106,7 +106,7 @@ async function startServer() {
         console.log('Database initialized successfully');
         
         app.listen(PORT, () => {
-            console.log(`🚀 ChatOnWrist Backend Server running on port ${PORT}`);
+            console.log(`🚀 ChatOnWrist Backend Server running on port ${PORT} - Updated`);
             console.log(`📱 Health check: http://localhost:${PORT}/health`);
             console.log(`🔗 API Base URL: http://localhost:${PORT}`);
         });
