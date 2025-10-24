@@ -102,14 +102,28 @@ app.use('*', (req, res) => {
 // Initialize database and start server
 async function startServer() {
     try {
+        console.log('Starting ChatOnWrist Backend Server...');
+        console.log('Environment:', process.env.NODE_ENV || 'development');
+        console.log('Port:', PORT);
+        
         await initializeDatabase();
         console.log('Database initialized successfully');
         
-        app.listen(PORT, () => {
-            console.log(`🚀 ChatOnWrist Backend Server running on port ${PORT} - Updated`);
-            console.log(`📱 Health check: http://localhost:${PORT}/health`);
-            console.log(`🔗 API Base URL: http://localhost:${PORT}`);
+        const server = app.listen(PORT, '0.0.0.0', () => {
+            console.log(`🚀 ChatOnWrist Backend Server running on port ${PORT}`);
+            console.log(`📱 Health check: http://0.0.0.0:${PORT}/health`);
+            console.log(`🔗 API Base URL: http://0.0.0.0:${PORT}`);
         });
+        
+        // Handle server errors
+        server.on('error', (err) => {
+            console.error('Server error:', err);
+            if (err.code === 'EADDRINUSE') {
+                console.error(`Port ${PORT} is already in use`);
+            }
+            process.exit(1);
+        });
+        
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);
@@ -117,3 +131,14 @@ async function startServer() {
 }
 
 startServer();
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully');
+    process.exit(0);
+});
