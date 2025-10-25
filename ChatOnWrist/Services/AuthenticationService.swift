@@ -23,9 +23,11 @@ class AuthenticationService: ObservableObject {
     }
     
     func signInWithApple() {
+        print("Sign in with Apple tapped!")
         // For production, we'll use a simplified authentication flow
         // that works on both simulator and real devices
         Task {
+            print("Starting authentication...")
             await authenticateWithBackend(appleIDToken: "production_user_token")
         }
     }
@@ -75,22 +77,28 @@ class AuthenticationService: ObservableObject {
     }
     
     func authenticateWithBackend(appleIDToken: String) async {
+        print("authenticateWithBackend called with token: \(appleIDToken)")
+        
         await MainActor.run {
             self.isLoading = true
             self.errorMessage = nil
         }
         
+        print("Calling backend service...")
         let result = await backendService.authenticateUser(appleIDToken: appleIDToken)
+        print("Backend result: \(result)")
         
         await MainActor.run {
             self.isLoading = false
             
             switch result {
             case .success(let response):
+                print("Authentication successful!")
                 self.userAccessToken = response.userToken
                 self.isAuthenticated = true
                 self.keychain.save(key: "userAccessToken", value: response.userToken)
             case .failure(let error):
+                print("Authentication failed: \(error.localizedDescription)")
                 self.errorMessage = error.localizedDescription
             }
         }

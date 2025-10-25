@@ -35,6 +35,18 @@ struct LoginView: View {
             .controlSize(.large)
             .frame(height: 50)
             .cornerRadius(8)
+            .disabled(authService.isLoading)
+            
+            if authService.isLoading {
+                ProgressView("Signing in...")
+                    .padding(.top, 10)
+            }
+            
+            if let errorMessage = authService.errorMessage {
+                Text("Error: \(errorMessage)")
+                    .foregroundColor(.red)
+                    .padding(.top, 10)
+            }
             
             Spacer()
         }
