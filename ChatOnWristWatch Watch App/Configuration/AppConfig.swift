@@ -30,7 +30,7 @@ struct AppConfig {
     #if DEBUG
     static let backendBaseURL = "http://127.0.0.1:3000" // Local development server
     #else
-    static let backendBaseURL = "https://chatonwrist-production.up.railway.app" // Production server
+    static let backendBaseURL = "https://chatonwrist-production-79ac.up.railway.app" // Production server
     #endif
     
     // App settings
