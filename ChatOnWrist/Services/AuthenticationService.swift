@@ -105,16 +105,6 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
             self.errorMessage = nil
         }
         
-        // For testing, simulate successful authentication
-        await MainActor.run {
-            self.userAccessToken = "mock_user_token_\(UUID().uuidString)"
-            self.isAuthenticated = true
-            self.keychain.save(key: "userAccessToken", value: self.userAccessToken ?? "")
-            self.isLoading = false
-        }
-        
-        // TODO: Uncomment when backend is running
-        /*
         let result = await backendService.authenticateUser(appleIDToken: appleIDToken)
         
         await MainActor.run {
@@ -129,7 +119,6 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                 self.errorMessage = error.localizedDescription
             }
         }
-        */
     }
 }
 

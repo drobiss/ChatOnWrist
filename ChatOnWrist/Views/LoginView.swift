@@ -43,15 +43,7 @@ struct LoginView: View {
     }
     
     private func authenticateWithApple() {
-        // For now, simulate successful authentication
-        // In a real app, you'd use SignInWithAppleButton
-        Task {
-            await MainActor.run {
-                authService.isAuthenticated = true
-                authService.userAccessToken = "mock_user_token_\(UUID().uuidString)"
-                authService.deviceToken = "mock_device_token_\(UUID().uuidString)"
-            }
-        }
+        authService.signInWithApple()
     }
 }
 
