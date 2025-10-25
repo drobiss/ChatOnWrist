@@ -89,9 +89,6 @@ class BackendService: ObservableObject {
         let endpoint = "/chat/test"
         let request = TestChatRequest(message: message)
         
-        print("Calling backend: \(baseURL)\(endpoint)")
-        print("Request body: \(request)")
-        
         return await makeRequest(endpoint: endpoint, method: "POST", body: request)
     }
     
@@ -179,9 +176,7 @@ class BackendService: ObservableObject {
                 return .success(decodedResponse)
             } else {
                 let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data)
-                let errorMessage = errorResponse?.message ?? "HTTP \(httpResponse.statusCode): \(String(data: data, encoding: .utf8) ?? "Unknown error")"
-                print("Backend error: \(errorMessage)")
-                return .failure(.serverError(errorMessage))
+                return .failure(.serverError(errorResponse?.message ?? "HTTP \(httpResponse.statusCode)"))
             }
         } catch {
             return .failure(.networkError(error.localizedDescription))
