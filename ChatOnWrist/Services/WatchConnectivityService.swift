@@ -20,8 +20,11 @@ class WatchConnectivityService: NSObject, ObservableObject {
         super.init()
         
         if WCSession.isSupported() {
+            print("WCSession is supported")
             session.delegate = self
             session.activate()
+        } else {
+            print("WCSession is not supported on this device")
         }
     }
     
@@ -146,8 +149,14 @@ class WatchConnectivityService: NSObject, ObservableObject {
 
 extension WatchConnectivityService: WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        print("WCSession activation completed with state: \(activationState.rawValue)")
+        if let error = error {
+            print("WCSession activation error: \(error.localizedDescription)")
+        }
+        
         DispatchQueue.main.async {
             self.isWatchAppInstalled = activationState == .activated
+            print("Watch app installed: \(self.isWatchAppInstalled)")
         }
     }
     
@@ -164,6 +173,7 @@ extension WatchConnectivityService: WCSessionDelegate {
     }
     
     func sessionReachabilityDidChange(_ session: WCSession) {
+        print("Watch reachability changed: \(session.isReachable)")
         DispatchQueue.main.async {
             self.isWatchReachable = session.isReachable
         }
