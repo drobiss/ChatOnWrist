@@ -27,11 +27,8 @@ struct AppConfig {
     }()
     
     // Backend API configuration
-    #if DEBUG
-    static let backendBaseURL = "http://127.0.0.1:3000" // Local development server
-    #else
-    static let backendBaseURL = "https://chatonwrist-production-79ac.up.railway.app" // Production server
-    #endif
+    // Use production server for both DEBUG and RELEASE builds
+    static let backendBaseURL = "https://chatonwrist-production-79ac.up.railway.app"
     
     // App settings
     static let maxTokens = 150
