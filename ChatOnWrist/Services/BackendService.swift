@@ -86,17 +86,10 @@ class BackendService: ObservableObject {
     }
 
     func sendTestMessage(message: String) async -> Result<ChatResponse, BackendError> {
-        // For now, simulate a successful AI response
-        // This will be replaced with real backend call once Railway deploys
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+        let endpoint = "/chat/test"
+        let request = TestChatRequest(message: message)
         
-        let mockResponse = ChatResponse(
-            response: "I received your message: '\(message)'. This is a simulated AI response. The backend is working correctly!",
-            conversationId: "test-conversation-\(UUID().uuidString)",
-            messageId: "test-message-\(UUID().uuidString)"
-        )
-        
-        return .success(mockResponse)
+        return await makeRequest(endpoint: endpoint, method: "POST", body: request)
     }
     
     func getConversations(deviceToken: String) async -> Result<[ConversationResponse], BackendError> {
