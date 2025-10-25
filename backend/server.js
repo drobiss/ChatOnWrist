@@ -40,6 +40,29 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Admin endpoint to view users (for development)
+app.get('/admin/users', async (req, res) => {
+    try {
+        const { getDatabase } = require('./database/init');
+        const db = getDatabase();
+        
+        const users = await new Promise((resolve, reject) => {
+            db.all('SELECT * FROM users ORDER BY created_at DESC', (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
+            });
+        });
+        
+        res.json({
+            count: users.length,
+            users: users
+        });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: 'Failed to fetch users' });
+    }
+});
+
 // Test chat endpoint (no auth required for testing)
 app.post('/test-chat', async (req, res) => {
     try {
