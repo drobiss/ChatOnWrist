@@ -13,15 +13,12 @@ struct ContentView: View {
     @StateObject private var watchConnectivity = WatchConnectivityService()
     
     var body: some View {
-        if authService.deviceToken != nil {
-            WatchHomeView()
-                .environmentObject(conversationStore)
-                .environmentObject(authService)
-                .environmentObject(watchConnectivity)
-        } else {
-            WatchPairingView()
-                .environmentObject(authService)
-        }
+        // Skip pairing requirement - go directly to home view
+        // Watch will work with iPhone through WCSession automatically
+        WatchHomeView()
+            .environmentObject(conversationStore)
+            .environmentObject(authService)
+            .environmentObject(watchConnectivity)
     }
 }
 

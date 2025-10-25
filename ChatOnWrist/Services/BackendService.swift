@@ -18,9 +18,7 @@ class BackendService: ObservableObject {
     
     init(baseURL: String = AppConfig.backendBaseURL) {
         self.baseURL = baseURL
-        Task {
-            await testConnection()
-        }
+        // Don't auto-test connection on init to avoid blocking authentication
     }
     
     // MARK: - Connection Testing

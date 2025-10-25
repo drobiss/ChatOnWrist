@@ -80,6 +80,7 @@ class AuthenticationService: ObservableObject {
             self.errorMessage = nil
         }
         
+        print("Starting authentication with backend...")
         let result = await backendService.authenticateUser(appleIDToken: appleIDToken)
         
         await MainActor.run {
@@ -87,11 +88,13 @@ class AuthenticationService: ObservableObject {
             
             switch result {
             case .success(let response):
+                print("Authentication successful!")
                 self.userAccessToken = response.userToken
                 self.isAuthenticated = true
                 self.keychain.save(key: "userAccessToken", value: response.userToken)
             case .failure(let error):
-                self.errorMessage = error.localizedDescription
+                print("Authentication failed: \(error.localizedDescription)")
+                self.errorMessage = "Authentication failed: \(error.localizedDescription)"
             }
         }
     }

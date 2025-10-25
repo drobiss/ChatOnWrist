@@ -9,58 +9,100 @@ import SwiftUI
 
 struct WatchHomeView: View {
     @EnvironmentObject var conversationStore: ConversationStore
+    @StateObject private var watchConnectivity = WatchConnectivityService()
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                // Status indicator
+            VStack(spacing: 16) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "applewatch")
+                        .font(.title)
+                        .foregroundColor(.blue)
+                    
+                    Text("ChatOnWrist")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                }
+                
+                // Connection Status
                 HStack {
                     Circle()
-                        .fill(.green)
-                        .frame(width: 6, height: 6)
-                    Text("Connected")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .fill(watchConnectivity.isPhoneReachable ? .green : .red)
+                        .frame(width: 8, height: 8)
+                    Text(watchConnectivity.isPhoneReachable ? "iPhone Connected" : "iPhone Disconnected")
+                        .font(.caption)
+                        .foregroundColor(watchConnectivity.isPhoneReachable ? .green : .red)
                 }
                 
                 Spacer()
                 
-                // Main buttons
-                VStack(spacing: 16) {
-                    NavigationLink(destination: WatchChatView()) {
-                        VStack {
-                            Image(systemName: "message.fill")
-                                .font(.title2)
-                            Text("Chat")
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
+                // Main Action - Quick Chat
+                NavigationLink(destination: WatchChatView()) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "message.circle.fill")
+                            .font(.system(size: 32))
+                        Text("Start Chat")
+                            .font(.headline)
+                            .fontWeight(.semibold)
                     }
-                    
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 80)
+                    .background(
+                        LinearGradient(
+                            colors: [.blue, .blue.opacity(0.8)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .foregroundColor(.white)
+                    .cornerRadius(16)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Secondary Actions
+                HStack(spacing: 12) {
                     NavigationLink(destination: WatchHistoryView()) {
-                        VStack {
+                        VStack(spacing: 4) {
                             Image(systemName: "clock.fill")
-                                .font(.title2)
+                                .font(.title3)
                             Text("History")
-                                .font(.headline)
+                                .font(.caption)
+                                .fontWeight(.medium)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.gray)
-                        .foregroundColor(.white)
+                        .frame(height: 50)
+                        .background(Color.gray.opacity(0.2))
+                        .foregroundColor(.primary)
                         .cornerRadius(12)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    Button(action: {
+                        // Quick action for voice input
+                        print("Voice input tapped")
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "mic.fill")
+                                .font(.title3)
+                            Text("Voice")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color.green.opacity(0.2))
+                        .foregroundColor(.green)
+                        .cornerRadius(12)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
                 
                 Spacer()
             }
             .padding()
-            .navigationTitle("ChatOnWrist")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("")
+            .navigationBarHidden(true)
         }
     }
 }
