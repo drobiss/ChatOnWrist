@@ -11,6 +11,7 @@ struct SimpleChatView: View {
     @State private var messageText = ""
     @State private var messages: [String] = []
     @State private var isLoading = false
+    @StateObject private var backendService = BackendService()
     
     var body: some View {
         NavigationView {
@@ -52,10 +53,20 @@ struct SimpleChatView: View {
         messageText = ""
         isLoading = true
         
-        // Simulate AI response
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            messages.append("AI: Hello! I received your message: \(message)")
-            isLoading = false
+        // Call real backend API
+        Task {
+            let result = await backendService.sendTestMessage(message: message)
+            
+            await MainActor.run {
+                isLoading = false
+                
+                switch result {
+                case .success(let response):
+                    messages.append("AI: \(response.response)")
+                case .failure(let error):
+                    messages.append("AI: Error - \(error.localizedDescription)")
+                }
+            }
         }
     }
 }
