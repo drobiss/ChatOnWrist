@@ -17,13 +17,23 @@ router.post('/apple', async (req, res) => {
             });
         }
 
-        // In a real implementation, you would verify the Apple ID token with Apple's servers
-        // For now, we'll create a mock user for testing
-        const mockAppleUser = {
-            sub: 'mock_apple_user_id',
-            email: 'test@example.com',
-            email_verified: true
-        };
+        // Handle simulator test token
+        let mockAppleUser;
+        if (appleIDToken === 'simulator_test_token') {
+            mockAppleUser = {
+                sub: 'simulator_user_id',
+                email: 'simulator@example.com',
+                email_verified: true
+            };
+        } else {
+            // In a real implementation, you would verify the Apple ID token with Apple's servers
+            // For now, we'll create a mock user for testing
+            mockAppleUser = {
+                sub: 'mock_apple_user_id',
+                email: 'test@example.com',
+                email_verified: true
+            };
+        }
 
         const db = getDatabase();
         

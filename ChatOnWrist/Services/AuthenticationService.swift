@@ -25,6 +25,12 @@ class AuthenticationService: NSObject, ObservableObject {
     }
     
     func signInWithApple() {
+        #if targetEnvironment(simulator)
+        // Apple Sign In doesn't work in simulator, use fallback for testing
+        Task {
+            await authenticateWithBackend(appleIDToken: "simulator_test_token")
+        }
+        #else
         let request = ASAuthorizationAppleIDProvider().createRequest()
         request.requestedScopes = [.fullName, .email]
         
@@ -32,6 +38,7 @@ class AuthenticationService: NSObject, ObservableObject {
         controller.delegate = self
         controller.presentationContextProvider = self
         controller.performRequests()
+        #endif
     }
     
     func signOut() {
