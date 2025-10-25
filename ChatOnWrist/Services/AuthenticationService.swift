@@ -18,8 +18,7 @@ class AuthenticationService: ObservableObject {
     private let keychain = KeychainService()
     private let backendService = BackendService()
     
-    override init() {
-        super.init()
+    init() {
         loadStoredTokens()
     }
     
@@ -74,8 +73,7 @@ class AuthenticationService: ObservableObject {
             deviceToken = storedDeviceToken
         }
     }
-}
-
+    
     func authenticateWithBackend(appleIDToken: String) async {
         await MainActor.run {
             self.isLoading = true
