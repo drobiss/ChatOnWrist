@@ -87,9 +87,12 @@ router.post('/apple', async (req, res) => {
 
     } catch (error) {
         console.error('Authentication error:', error);
+        console.error('Error details:', error.message);
+        console.error('JWT_SECRET exists:', !!process.env.JWT_SECRET);
         res.status(500).json({
             message: 'Authentication failed',
-            code: 'AUTH_ERROR'
+            code: 'AUTH_ERROR',
+            details: error.message
         });
     }
 });
