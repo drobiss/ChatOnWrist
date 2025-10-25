@@ -40,9 +40,20 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Admin endpoint to view users (for development)
+// Admin endpoint to view users (PROTECTED - requires admin key)
 app.get('/admin/users', async (req, res) => {
     try {
+        // Check for admin key in query parameter
+        const adminKey = req.query.key;
+        const expectedKey = process.env.ADMIN_KEY || 'chatonwrist_admin_2025';
+        
+        if (adminKey !== expectedKey) {
+            return res.status(401).json({ 
+                error: 'Unauthorized - admin key required',
+                hint: 'Add ?key=your_admin_key to the URL'
+            });
+        }
+        
         const { getDatabase } = require('./database/init');
         const db = getDatabase();
         
