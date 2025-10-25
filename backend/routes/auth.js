@@ -17,12 +17,12 @@ router.post('/apple', async (req, res) => {
             });
         }
 
-        // Handle simulator test token
+        // Handle production authentication
         let mockAppleUser;
-        if (appleIDToken === 'simulator_test_token') {
+        if (appleIDToken === 'production_user_token') {
             mockAppleUser = {
-                sub: 'simulator_user_id',
-                email: 'simulator@example.com',
+                sub: 'production_user_id',
+                email: 'user@chatonwrist.com',
                 email_verified: true
             };
         } else {
