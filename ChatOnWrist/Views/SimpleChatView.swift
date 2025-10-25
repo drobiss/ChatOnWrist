@@ -12,6 +12,7 @@ struct SimpleChatView: View {
     @State private var messages: [String] = []
     @State private var isLoading = false
     @StateObject private var backendService = BackendService()
+    @StateObject private var watchConnectivity = WatchConnectivityService()
     
     var body: some View {
         NavigationView {
@@ -27,6 +28,18 @@ struct SimpleChatView: View {
                         }
                     }
                     .padding()
+                }
+                
+                // Watch Connection Status
+                if watchConnectivity.isWatchReachable {
+                    HStack {
+                        Image(systemName: "applewatch")
+                            .foregroundColor(.green)
+                        Text("Watch Connected")
+                            .foregroundColor(.green)
+                            .font(.caption)
+                    }
+                    .padding(.horizontal)
                 }
                 
                 // Input
@@ -53,6 +66,12 @@ struct SimpleChatView: View {
         messageText = ""
         isLoading = true
         
+        // Send message to Watch if connected
+        if watchConnectivity.isWatchReachable {
+            let watchMessage = Message(content: message, isFromUser: true)
+            watchConnectivity.sendMessageToWatch(watchMessage, conversationId: "current")
+        }
+        
         // Call real backend API
         Task {
             let result = await backendService.sendTestMessage(message: message)
@@ -62,9 +81,17 @@ struct SimpleChatView: View {
                 
                 switch result {
                 case .success(let response):
-                    messages.append("AI: \(response.response)")
+                    let aiResponse = "AI: \(response.response)"
+                    messages.append(aiResponse)
+                    
+                    // Send AI response to Watch if connected
+                    if watchConnectivity.isWatchReachable {
+                        let watchMessage = Message(content: response.response, isFromUser: false)
+                        watchConnectivity.sendMessageToWatch(watchMessage, conversationId: "current")
+                    }
                 case .failure(let error):
-                    messages.append("AI: Error - \(error.localizedDescription)")
+                    let errorMessage = "AI: Error - \(error.localizedDescription)"
+                    messages.append(errorMessage)
                 }
             }
         }
