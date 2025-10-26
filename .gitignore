@@ -63,4 +63,4 @@ backend/database.sqlite
 # API Keys (for local development only)
 **/AppConfig.swift.local
 **/LocalConfig.plist
-backend/setup-local.js
+backend/setup-local.jsbackend/.env
