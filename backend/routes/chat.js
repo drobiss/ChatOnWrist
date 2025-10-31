@@ -7,6 +7,11 @@ const { getDatabase } = require('../database/init');
 const router = express.Router();
 
 // Test endpoint (no auth required)
+const baseSystemPrompt = `You are ChatOnWrist, a concise, context-aware AI assistant. 
+- Always keep the conversation history in mind and treat follow-up questions as referring to the most recent topic unless the user clearly switches subjects.
+- Answer in the language the user uses.
+- Provide a direct answer first. Add short supporting context only if it helps understanding.`;
+
 router.post('/test', async (req, res) => {
     try {
         const { message } = req.body;
@@ -19,9 +24,12 @@ router.post('/test', async (req, res) => {
         const axios = require('axios');
         const openaiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: 'gpt-4o',
-            messages: [{ role: 'user', content: message }],
+            messages: [
+                { role: 'system', content: baseSystemPrompt },
+                { role: 'user', content: message }
+            ],
             max_tokens: 150,
-            temperature: 0.7
+            temperature: 0.3
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -136,23 +144,28 @@ router.post('/message', async (req, res) => {
         });
 
         // Prepare messages for OpenAI
-        const messages = conversationHistory.map(msg => ({
-            role: msg.is_from_user ? 'user' : 'assistant',
-            content: msg.content
-        }));
-
-        // Add the new user message
-        messages.push({
-            role: 'user',
-            content: message
-        });
+        const messages = [
+            {
+                role: 'system',
+                content: baseSystemPrompt
+            },
+            ...conversationHistory.map(msg => ({
+                role: msg.is_from_user ? 'user' : 'assistant',
+                content: msg.content
+            }))
+        ];
 
         // Call OpenAI API
+        const configuredTemperature = parseFloat(process.env.OPENAI_TEMPERATURE);
+        const temperature = Number.isFinite(configuredTemperature) ? configuredTemperature : 0.3;
+        const configuredMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS, 10);
+        const maxTokens = Number.isInteger(configuredMaxTokens) ? configuredMaxTokens : 200;
+
         const openaiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: process.env.OPENAI_MODEL || 'gpt-4o',
             messages: messages,
-            max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS) || 150,
-            temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7
+            max_tokens: maxTokens,
+            temperature
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,

@@ -11,6 +11,7 @@ struct ContentView: View {
     @StateObject private var conversationStore = ConversationStore()
     @StateObject private var authService = AuthenticationService()
     @StateObject private var watchConnectivity = WatchConnectivityService()
+    @StateObject private var syncService = ConversationSyncService.shared
     
     var body: some View {
         // Skip pairing requirement - go directly to home view
@@ -19,6 +20,7 @@ struct ContentView: View {
             .environmentObject(conversationStore)
             .environmentObject(authService)
             .environmentObject(watchConnectivity)
+            .environmentObject(syncService)
     }
 }
 

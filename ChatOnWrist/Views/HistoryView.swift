@@ -10,19 +10,137 @@ import AVFoundation
 
 struct HistoryView: View {
     @EnvironmentObject var conversationStore: ConversationStore
+    @EnvironmentObject var watchConnectivity: WatchConnectivityService
+    @StateObject private var syncService = ConversationSyncService.shared
     @State private var selectedConversation: Conversation?
+    @State private var showingSyncStatus = false
     
     var body: some View {
         NavigationView {
-            List {
-                ForEach(conversationStore.conversations) { conversation in
-                    ConversationRow(conversation: conversation)
-                        .onTapGesture {
-                            selectedConversation = conversation
+            ZStack {
+                // Glassmorphism background
+                Color.black
+                    .ignoresSafeArea()
+                
+                // Subtle gradient overlay
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.9),
+                        Color.black.opacity(0.7),
+                        Color.black.opacity(0.9)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                VStack {
+                    // Connection status bar - glassmorphism style
+                    HStack {
+                        Circle()
+                            .fill(watchConnectivity.isWatchReachable ? Color.green : Color.red)
+                            .frame(width: 8, height: 8)
+                        
+                        Text(watchConnectivity.isWatchReachable ? "Watch Connected" : "Watch Offline")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                        
+                        if syncService.isSyncing {
+                            Spacer()
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .tint(.white)
+                            Text("Syncing...")
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.7))
                         }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.ultraThinMaterial)
+                                .opacity(0.3)
+                            
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.05),
+                                            Color.white.opacity(0.02)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                            
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.1),
+                                            Color.white.opacity(0.05)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 0.5
+                                )
+                        }
+                    )
+                    .padding(.horizontal)
+                
+                List {
+                    ForEach(conversationStore.conversations) { conversation in
+                        ConversationRow(conversation: conversation)
+                            .onTapGesture {
+                                selectedConversation = conversation
+                            }
+                    }
+                }
+                .listStyle(PlainListStyle())
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
+                }
+                .refreshable {
+                    syncService.forceSync()
                 }
             }
             .navigationTitle("History")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack {
+                        Button(action: {
+                            conversationStore.deleteAllConversations()
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
+                        
+                        Button(action: {
+                            syncService.forceSync()
+                        }) {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundColor(syncService.isSyncing ? .gray : .blue)
+                        }
+                        .disabled(syncService.isSyncing)
+                    }
+                }
+            }
+            .preferredColorScheme(.dark)
+            .onAppear {
+                // Configure navigation bar appearance for dark theme
+                let appearance = UINavigationBarAppearance()
+                appearance.configureWithTransparentBackground()
+                appearance.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+                appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+                appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+                
+                UINavigationBar.appearance().standardAppearance = appearance
+                UINavigationBar.appearance().scrollEdgeAppearance = appearance
+                UINavigationBar.appearance().compactAppearance = appearance
+            }
             .sheet(item: $selectedConversation) { conversation in
                 ConversationDetailView(conversation: conversation)
             }
@@ -34,22 +152,59 @@ struct ConversationRow: View {
     let conversation: Conversation
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(conversation.title)
-                .font(.headline)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.white)
                 .lineLimit(1)
             
             if let lastMessage = conversation.messages.last {
                 Text(lastMessage.content)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
                     .lineLimit(2)
             }
             
             Text(conversation.createdAt, style: .relative)
-                .font(.caption2)
-                .foregroundColor(.secondary)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.3)
+                
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.05),
+                                Color.white.opacity(0.02)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.1),
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            }
+        )
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .padding(.horizontal, 16)
         .padding(.vertical, 4)
     }
 }
@@ -154,7 +309,92 @@ struct ConversationDetailView: View {
     
     private func speakText(_ text: String) {
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        
+        // Use the most natural-sounding English voice
+        let naturalVoiceIdentifiers = [
+            "com.apple.voice.enhanced.en-US.Samantha",     // Siri Female (Enhanced) - Most natural (Physical only)
+            "com.apple.voice.enhanced.en-US.Alex",         // Alex (Enhanced) - Very natural (Physical only)
+            "com.apple.voice.enhanced.en-GB.Daniel",       // British Male (Enhanced) (Physical only)
+            "com.apple.voice.enhanced.en-AU.Karen",        // Australian Female (Enhanced) (Physical only)
+            "com.apple.voice.compact.en-US.Samantha",      // Samantha (Compact) - Good fallback
+            "com.apple.voice.compact.en-US.Alex",          // Alex (Compact) - Good fallback
+            "com.apple.voice.compact.en-GB.Daniel",        // Daniel (Compact) - British
+            "com.apple.voice.compact.en-AU.Karen"          // Karen (Compact) - Australian
+        ]
+        
+        // Fallback voices for simulator and older devices
+        let fallbackVoiceNames = [
+            "Samantha",    // Most natural standard voice
+            "Alex",        // Good male voice
+            "Daniel",      // British accent
+            "Karen",       // Australian accent
+            "Tessa",       // South African accent
+            "Moira"        // Irish accent
+        ]
+        
+        // Try to find the most natural voice
+        var selectedVoice: AVSpeechSynthesisVoice?
+        let availableVoices = AVSpeechSynthesisVoice.speechVoices()
+        
+        // Try each natural voice identifier in order of preference
+        for voiceIdentifier in naturalVoiceIdentifiers {
+            if let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) {
+                selectedVoice = voice
+                break
+            }
+        }
+        
+        // Try to find voices by name (for simulator compatibility)
+        if selectedVoice == nil {
+            for voiceName in fallbackVoiceNames {
+                if let voice = availableVoices.first(where: { 
+                    $0.name == voiceName && $0.language.hasPrefix("en") 
+                }) {
+                    selectedVoice = voice
+                    break
+                }
+            }
+        }
+        
+        // Fallback to any enhanced English voice (if available on physical device)
+        if selectedVoice == nil {
+            let enhancedEnglishVoices = availableVoices.filter { voice in
+                voice.language.hasPrefix("en") && voice.name.contains("Enhanced")
+            }
+            selectedVoice = enhancedEnglishVoices.first
+        }
+        
+        // Try to find the best standard English voice
+        if selectedVoice == nil {
+            let standardEnglishVoices = availableVoices.filter { voice in
+                voice.language.hasPrefix("en") && !voice.name.contains("Enhanced") && 
+                !voice.name.contains("Bad News") && !voice.name.contains("Bahh") &&
+                !voice.name.contains("Bells") && !voice.name.contains("Boing") &&
+                !voice.name.contains("Bubbles") && !voice.name.contains("Cellos") &&
+                !voice.name.contains("Wobble") && !voice.name.contains("Fred") &&
+                !voice.name.contains("Good News") && !voice.name.contains("Jester") &&
+                !voice.name.contains("Junior") && !voice.name.contains("Kathy") &&
+                !voice.name.contains("Organ") && !voice.name.contains("Superstar") &&
+                !voice.name.contains("Ralph") && !voice.name.contains("Trinoids") &&
+                !voice.name.contains("Whisper") && !voice.name.contains("Zarvox")
+            }
+            selectedVoice = standardEnglishVoices.first
+        }
+        
+        // Final fallback to any English voice
+        if selectedVoice == nil {
+            selectedVoice = AVSpeechSynthesisVoice(language: "en-US")
+        }
+        
+        utterance.voice = selectedVoice
+        
+        // Optimized speech parameters for natural sound
+        utterance.rate = 0.48
+        utterance.pitchMultiplier = 1.05
+        utterance.volume = 0.95
+        utterance.preUtteranceDelay = 0.15
+        utterance.postUtteranceDelay = 0.25
+        
         speechSynthesizer.speak(utterance)
     }
 }

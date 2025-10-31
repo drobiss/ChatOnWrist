@@ -20,44 +20,99 @@ struct ChatView: View {
     
     var body: some View {
         NavigationView {
-            VStack {
-                // Messages List
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        if let currentConversation = conversationStore.currentConversation {
-                            ForEach(currentConversation.messages, id: \.id) { message in
-                                MessageBubble(
-                                    message: message.content,
-                                    isFromUser: message.isFromUser,
-                                    timestamp: message.timestamp
-                                )
-                            }
-                        }
-                        
-                        if isLoading {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("AI is thinking...")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding()
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
+            ZStack {
+                // Glassmorphism background
+                Color.black
+                    .ignoresSafeArea()
                 
-                // Input Area
+                // Subtle gradient overlay
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.9),
+                        Color.black.opacity(0.7),
+                        Color.black.opacity(0.9)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                VStack {
+                    // Messages List
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            if let currentConversation = conversationStore.currentConversation {
+                                ForEach(currentConversation.messages, id: \.id) { message in
+                                    MessageBubble(
+                                        message: message.content,
+                                        isFromUser: message.isFromUser,
+                                        timestamp: message.timestamp
+                                    )
+                                }
+                            }
+                            
+                            if isLoading {
+                                HStack {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .tint(.white)
+                                    Text("AI is thinking...")
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                                .padding()
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
+                
+                // Input Area - Glassmorphism style
                 VStack(spacing: 12) {
                     // Voice Recording Button
                     HStack {
                         Button(action: toggleRecording) {
-                            HStack {
+                            HStack(spacing: 8) {
                                 Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                                    .font(.system(size: 16, weight: .medium))
                                 Text(isRecording ? "Stop Recording" : "Hold to Record")
+                                    .font(.system(size: 14, weight: .medium))
                             }
-                            .foregroundColor(isRecording ? .red : .blue)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(.ultraThinMaterial)
+                                        .opacity(0.6)
+                                    
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.2),
+                                                    Color.white.opacity(0.1)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                    
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.4),
+                                                    Color.white.opacity(0.2)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 0.8
+                                        )
+                                }
+                            )
+                            .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1.5)
                         }
                         .disabled(isLoading)
                         
@@ -66,27 +121,125 @@ struct ChatView: View {
                         if isRecording {
                             Text("Recording...")
                                 .font(.caption)
-                                .foregroundColor(.red)
+                                .foregroundColor(.white.opacity(0.7))
                         }
                     }
                     
                     // Text Input
-                    HStack {
+                    HStack(spacing: 12) {
                         TextField("Type a message...", text: $messageText)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(.ultraThinMaterial)
+                                        .opacity(0.5)
+                                    
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.1),
+                                                    Color.white.opacity(0.03)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                    
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.25),
+                                                    Color.white.opacity(0.08)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 0.6
+                                        )
+                                }
+                            )
                             .disabled(isLoading)
                         
-                        Button("Send") {
-                            sendMessage()
+                        Button(action: sendMessage) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    ZStack {
+                                        Circle()
+                                            .fill(.ultraThinMaterial)
+                                            .opacity(0.6)
+                                        
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color.white.opacity(0.2),
+                                                        Color.white.opacity(0.1)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                        
+                                        Circle()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color.white.opacity(0.4),
+                                                        Color.white.opacity(0.2)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 0.8
+                                            )
+                                    }
+                                )
+                                .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1.5)
                         }
                         .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                     }
                 }
                 .padding()
-                .background(Color(.systemBackground))
+                .background(
+                    ZStack {
+                        Color.black.opacity(0.3)
+                        
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.05),
+                                Color.white.opacity(0.02)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    }
+                )
+                }
             }
             .navigationTitle("Chat")
             .navigationBarTitleDisplayMode(.inline)
+            .preferredColorScheme(.dark)
+            .onAppear {
+                // Configure navigation bar appearance for dark theme
+                let appearance = UINavigationBarAppearance()
+                appearance.configureWithTransparentBackground()
+                appearance.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+                appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+                appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+                
+                UINavigationBar.appearance().standardAppearance = appearance
+                UINavigationBar.appearance().scrollEdgeAppearance = appearance
+                UINavigationBar.appearance().compactAppearance = appearance
+            }
         }
         .onAppear {
             loadConversations()

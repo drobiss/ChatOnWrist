@@ -12,6 +12,12 @@ struct ChatOnWristWatch_Watch_AppApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear {
+                    print("Watch app starting...")
+                }
+                .task {
+                    print("Watch app task started")
+                }
         }
     }
 }

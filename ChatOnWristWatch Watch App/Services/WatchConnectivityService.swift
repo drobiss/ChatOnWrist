@@ -67,6 +67,19 @@ class WatchConnectivityService: NSObject, ObservableObject {
         }
     }
     
+    func sendConversationToiPhone(_ conversation: Conversation) {
+        guard isPhoneReachable else { return }
+        
+        let data: [String: Any] = [
+            "type": "conversation",
+            "conversation": encodeConversation(conversation)
+        ]
+        
+        session.sendMessage(data, replyHandler: nil) { error in
+            print("Error sending conversation to iPhone: \(error.localizedDescription)")
+        }
+    }
+    
     // MARK: - Receive Data from iPhone
     
     func handleiPhoneMessage(_ message: [String: Any]) {
@@ -143,15 +156,29 @@ class WatchConnectivityService: NSObject, ObservableObject {
         )
     }
     
+    private func encodeConversation(_ conversation: Conversation) -> [String: Any] {
+        return [
+            "id": conversation.id.uuidString,
+            "title": conversation.title,
+            "messages": conversation.messages.map { encodeMessage($0) },
+            "createdAt": conversation.createdAt.timeIntervalSince1970,
+            "remoteId": conversation.remoteId ?? ""
+        ]
+    }
+    
     private func decodeConversation(_ data: [String: Any]) -> Conversation? {
         guard let title = data["title"] as? String,
               let messagesData = data["messages"] as? [[String: Any]] else { return nil }
         
         let messages = messagesData.compactMap { decodeMessage($0) }
+        let id = UUID(uuidString: data["id"] as? String ?? "") ?? UUID()
+        let createdAt = Date(timeIntervalSince1970: data["createdAt"] as? TimeInterval ?? Date().timeIntervalSince1970)
+        let remoteId = data["remoteId"] as? String
         
         return Conversation(
             title: title,
-            messages: messages
+            messages: messages,
+            remoteId: remoteId
         )
     }
 }
@@ -187,6 +214,18 @@ extension WatchConnectivityService: WCSessionDelegate {
         DispatchQueue.main.async {
             self.handleiPhoneMessage(message)
             replyHandler(["status": "received"])
+        }
+    }
+    
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        DispatchQueue.main.async {
+            self.handleiPhoneMessage(applicationContext)
+        }
+    }
+    
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        DispatchQueue.main.async {
+            self.handleiPhoneMessage(userInfo)
         }
     }
 }

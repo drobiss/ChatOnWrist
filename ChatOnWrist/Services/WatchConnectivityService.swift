@@ -31,15 +31,20 @@ class WatchConnectivityService: NSObject, ObservableObject {
     // MARK: - Send Data to Watch
     
     func sendConversationToWatch(_ conversation: Conversation) {
-        guard isWatchReachable else { return }
+        guard isWatchReachable else { 
+            print("📱 Watch not reachable, skipping conversation send")
+            return 
+        }
         
         let data: [String: Any] = [
             "type": "conversation",
             "conversation": encodeConversation(conversation)
         ]
         
-        session.sendMessage(data, replyHandler: nil) { error in
-            print("Error sending conversation to watch: \(error.localizedDescription)")
+        session.sendMessage(data, replyHandler: { response in
+            print("📱 Conversation sent to watch successfully")
+        }) { error in
+            print("❌ Error sending conversation to watch: \(error.localizedDescription)")
         }
     }
     
@@ -119,9 +124,11 @@ class WatchConnectivityService: NSObject, ObservableObject {
     
     private func encodeConversation(_ conversation: Conversation) -> [String: Any] {
         return [
-            "id": conversation.id,
+            "id": conversation.id.uuidString,
             "title": conversation.title,
-            "messages": conversation.messages.map { encodeMessage($0) }
+            "messages": conversation.messages.map { encodeMessage($0) },
+            "createdAt": conversation.createdAt.timeIntervalSince1970,
+            "remoteId": conversation.remoteId ?? ""
         ]
     }
     
@@ -156,7 +163,9 @@ extension WatchConnectivityService: WCSessionDelegate {
         
         DispatchQueue.main.async {
             self.isWatchAppInstalled = activationState == .activated
+            self.isWatchReachable = session.isReachable
             print("Watch app installed: \(self.isWatchAppInstalled)")
+            print("Watch reachable: \(self.isWatchReachable)")
         }
     }
     

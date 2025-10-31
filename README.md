@@ -79,3 +79,4 @@ An AI Chat app for Apple Watch with voice control and an iOS companion app.
 # ChatOnWrist
 # ChatOnWrist
 
+

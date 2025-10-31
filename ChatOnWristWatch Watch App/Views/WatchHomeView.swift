@@ -9,94 +9,282 @@ import SwiftUI
 
 struct WatchHomeView: View {
     @EnvironmentObject var conversationStore: ConversationStore
-    @StateObject private var watchConnectivity = WatchConnectivityService()
+    @EnvironmentObject var authService: AuthenticationService
+    @EnvironmentObject var watchConnectivity: WatchConnectivityService
+    @State private var showHistory = false
+    @State private var isAnySheetPresented = false
+    @StateObject private var dictationService = DictationService()
+    @State private var navigateToChat = false
+    @State private var isPulsing = false
+    @State private var pulse = false
+    @State private var showSettingsPanel = false
+    @State private var showVoiceSettingsSheet = false
+    @State private var pendingDictationText: String?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                // Glassmorphism background
+                Color.black
+                    .ignoresSafeArea()
+                
+                // Subtle gradient overlay
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.8),
+                        Color.black.opacity(0.6),
+                        Color.black.opacity(0.8)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                // Ensure background never participates in implicit animations
+                .animation(nil, value: isPulsing)
+                
+                VStack(spacing: 14) {
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                showSettingsPanel.toggle()
+                            }
+                        }) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // Central pulsing microphone button (stable center pulse)
+                    ZStack {
+                        // Soft glow ring with opacity breathing (no scaling to avoid drift)
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.25), lineWidth: 2)
+                            .frame(width: 120, height: 120)
+                            .overlay(
+                                Circle()
+                                    .fill(Color.white.opacity(pulse ? 0.14 : 0.06))
+                                    .frame(width: 120, height: 120)
+                                    .blur(radius: 6)
+                            )
+                        
+                        Button(action: startVoiceAndOpenChat) {
+                            ZStack {
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                    .frame(width: 100, height: 100)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [Color.white.opacity(0.5), Color.white.opacity(0.2)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ), lineWidth: 1
+                                            )
+                                    )
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 36, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(GlassButtonStyle())
+                    }
+                    
+                    Text("Tap to speak")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                        .padding(.top, 4)
+                    
+                    // Hidden navigation to chat when ready
+                    NavigationLink(destination: WatchChatView(initialMessage: pendingDictationText)
+                        .environmentObject(conversationStore)
+                        .environmentObject(authService), isActive: $navigateToChat) { EmptyView() }
+                        .hidden()
+                        .onChange(of: navigateToChat) { newValue in
+                            if !newValue {
+                                pendingDictationText = nil
+                            }
+                        }
+                    
+                    Spacer()
+                }
+                .padding(12)
+                .onAppear {
+                    isPulsing = true
+                    withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                        pulse.toggle()
+                    }
+                }
+            }
+            .overlay(alignment: .top) {
+                if showSettingsPanel {
+                    QuickAccessPanel(
+                        onCollapse: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                showSettingsPanel = false
+                            }
+                        },
+                        onSettingsTap: {
+                            guard !isAnySheetPresented else { return }
+                            isAnySheetPresented = true
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                showSettingsPanel = false
+                            }
+                            showVoiceSettingsSheet = true
+                        },
+                        onHistoryTap: {
+                            guard !isAnySheetPresented else { return }
+                            showHistory = true
+                            isAnySheetPresented = true
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                showSettingsPanel = false
+                            }
+                        }
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.top, 22)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .sheet(isPresented: $showHistory, onDismiss: { isAnySheetPresented = false }) {
+                WatchHistoryView()
+                    .environmentObject(conversationStore)
+            }
+            .sheet(isPresented: $showVoiceSettingsSheet, onDismiss: { isAnySheetPresented = false }) {
+                VoiceSettingsView()
+            }
+        }
+    }
+}
+
+// MARK: - Glass Button Style
+struct GlassButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Quick Access Panel
+private struct QuickAccessPanel: View {
+    var onCollapse: () -> Void
+    var onSettingsTap: () -> Void
+    var onHistoryTap: () -> Void
     
     var body: some View {
-        VStack(spacing: 12) {
-            // Header - Compact for Watch
-            VStack(spacing: 4) {
-                Image(systemName: "applewatch")
-                    .font(.title2)
-                    .foregroundColor(.blue)
+        VStack(spacing: 20) {
+            Button(action: onCollapse) {
+                Capsule()
+                    .fill(Color.white.opacity(0.35))
+                    .frame(width: 32, height: 4)
+                    .padding(.top, 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            
+            HStack(spacing: 18) {
+                QuickActionButton(
+                    iconName: "gearshape.fill",
+                    action: onSettingsTap
+                )
                 
-                Text("ChatOnWrist")
-                    .font(.headline)
-                    .fontWeight(.bold)
+                QuickActionButton(
+                    iconName: "clock.fill",
+                    action: onHistoryTap
+                )
             }
-            
-            // Connection Status - Compact
-            HStack {
-                Circle()
-                    .fill(watchConnectivity.isPhoneReachable ? .green : .red)
-                    .frame(width: 6, height: 6)
-                Text(watchConnectivity.isPhoneReachable ? "Connected" : "Disconnected")
-                    .font(.caption2)
-                    .foregroundColor(watchConnectivity.isPhoneReachable ? .green : .red)
-            }
-            
-            Spacer()
-            
-            // Main Action - Optimized for Watch
-            NavigationLink(destination: WatchChatView()) {
-                VStack(spacing: 6) {
-                    Image(systemName: "message.circle.fill")
-                        .font(.title2)
-                    Text("Chat")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 60)
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            // Secondary Actions - Compact
-            HStack(spacing: 8) {
-                NavigationLink(destination: WatchHistoryView()) {
-                    VStack(spacing: 2) {
-                        Image(systemName: "clock.fill")
-                            .font(.caption)
-                        Text("History")
-                            .font(.caption2)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 40)
-                    .background(Color.gray.opacity(0.3))
-                    .foregroundColor(.primary)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                Button(action: {
-                    // Quick action for voice input
-                    print("Voice input tapped")
-                }) {
-                    VStack(spacing: 2) {
-                        Image(systemName: "mic.fill")
-                            .font(.caption)
-                        Text("Voice")
-                            .font(.caption2)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 40)
-                    .background(Color.green.opacity(0.3))
-                    .foregroundColor(.green)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            
-            Spacer()
         }
-        .padding(8)
+        .padding(.top, 30)
+        .padding(.bottom, 16)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.55),
+                                    Color.white.opacity(0.15)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                        .blendMode(.overlay)
+                )
+                .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 6)
+        )
+    }
+}
+
+private struct QuickActionButton: View {
+    var iconName: String
+    var action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.28),
+                                Color.white.opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+                    )
+                    .frame(width: 62, height: 62)
+                
+                Image(systemName: iconName)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+            }
+            .frame(width: 62, height: 62)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Actions
+private extension WatchHomeView {
+    func startVoiceAndOpenChat() {
+        dictationService.requestDictation(initialText: nil) { text in
+            guard
+                let content = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                !content.isEmpty
+            else {
+                // Stay on the home screen when dictation is cancelled or empty
+                navigateToChat = false
+                return
+            }
+            if conversationStore.currentConversation == nil {
+                _ = conversationStore.createNewConversation()
+            }
+            pendingDictationText = content
+            navigateToChat = true
+        }
     }
 }
 
 #Preview {
     WatchHomeView()
         .environmentObject(ConversationStore())
+        .environmentObject(AuthenticationService())
+        .environmentObject(WatchConnectivityService())
 }
-

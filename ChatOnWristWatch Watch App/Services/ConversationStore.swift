@@ -29,17 +29,27 @@ class ConversationStore: ObservableObject {
     
     func addMessage(_ message: Message, to conversation: Conversation) {
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
+            // Update the existing conversation
             conversations[index].messages.append(message)
             
             // Update title if it's the first message
             if conversations[index].messages.count == 1 {
                 let title = String(message.content.prefix(30))
-                conversations[index] = Conversation(
-                    title: title,
-                    messages: conversations[index].messages
-                )
+                conversations[index].title = title.isEmpty ? "New Conversation" : title
             }
             
+            // Update current conversation reference
+            currentConversation = conversations[index]
+            print("Added message: \(message.content), total messages: \(conversations[index].messages.count)")
+            saveConversations()
+        } else {
+            print("Error: Conversation not found")
+        }
+    }
+    
+    func updateRemoteId(_ remoteId: String, for conversationId: UUID) {
+        if let index = conversations.firstIndex(where: { $0.id == conversationId }) {
+            conversations[index].remoteId = remoteId
             currentConversation = conversations[index]
             saveConversations()
         }
@@ -49,20 +59,32 @@ class ConversationStore: ObservableObject {
         return conversations.first { $0.id == id }
     }
     
+    func deleteAllConversations() {
+        conversations.removeAll()
+        currentConversation = nil
+        saveConversations()
+        print("🗑️ All conversations deleted")
+    }
+    
     private func saveConversations() {
         do {
             let data = try JSONEncoder().encode(conversations)
             userDefaults.set(data, forKey: conversationsKey)
+            print("Saved \(conversations.count) conversations")
         } catch {
             print("Failed to save conversations: \(error)")
         }
     }
     
     private func loadConversations() {
-        guard let data = userDefaults.data(forKey: conversationsKey) else { return }
+        guard let data = userDefaults.data(forKey: conversationsKey) else {
+            print("No saved conversations found")
+            return
+        }
         
         do {
             conversations = try JSONDecoder().decode([Conversation].self, from: data)
+            print("Loaded \(conversations.count) conversations")
         } catch {
             print("Failed to load conversations: \(error)")
             conversations = []

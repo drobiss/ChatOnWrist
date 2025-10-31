@@ -451,6 +451,7 @@
 				INFOPLIST_FILE = "";
 				INFOPLIST_KEY_CFBundleDisplayName = ChatOnWristWatch;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone to record your voice for AI chat conversations.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to convert your voice to text for AI chat conversations.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.davidbrezina.ChatOnWrist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -487,6 +488,7 @@
 				INFOPLIST_FILE = "";
 				INFOPLIST_KEY_CFBundleDisplayName = ChatOnWristWatch;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone to record your voice for AI chat conversations.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to convert your voice to text for AI chat conversations.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.davidbrezina.ChatOnWrist;
 				LD_RUNPATH_SEARCH_PATHS = (

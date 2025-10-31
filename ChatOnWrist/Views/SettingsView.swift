@@ -17,7 +17,24 @@ struct SettingsView: View {
     
     var body: some View {
         NavigationView {
-            List {
+            ZStack {
+                // Glassmorphism background
+                Color.black
+                    .ignoresSafeArea()
+                
+                // Subtle gradient overlay
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.9),
+                        Color.black.opacity(0.7),
+                        Color.black.opacity(0.9)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                List {
                 // User Section
                 Section("Account") {
                     HStack {
@@ -136,9 +153,26 @@ struct SettingsView: View {
                     }
                     .foregroundColor(.red)
                 }
+                }
+                .listStyle(PlainListStyle())
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
+            .preferredColorScheme(.dark)
+            .onAppear {
+                // Configure navigation bar appearance for dark theme
+                let appearance = UINavigationBarAppearance()
+                appearance.configureWithTransparentBackground()
+                appearance.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+                appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+                appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+                
+                UINavigationBar.appearance().standardAppearance = appearance
+                UINavigationBar.appearance().scrollEdgeAppearance = appearance
+                UINavigationBar.appearance().compactAppearance = appearance
+            }
             .alert("Sign Out", isPresented: $showingLogoutAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Sign Out", role: .destructive) {

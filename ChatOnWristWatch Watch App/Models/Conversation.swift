@@ -9,15 +9,17 @@ import Foundation
 
 struct Conversation: Identifiable, Codable {
     let id: UUID
-    let title: String
+    var title: String
     let createdAt: Date
     var messages: [Message]
+    var remoteId: String?
     
-    init(title: String = "", messages: [Message] = []) {
+    init(title: String = "", messages: [Message] = [], remoteId: String? = nil) {
         self.id = UUID()
         self.title = title.isEmpty ? "New Conversation" : title
         self.createdAt = Date()
         self.messages = messages
+        self.remoteId = remoteId
     }
 }
 
@@ -34,5 +36,3 @@ struct Message: Identifiable, Codable {
         self.timestamp = Date()
     }
 }
-
-
