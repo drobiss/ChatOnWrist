@@ -285,7 +285,8 @@ struct ChatView: View {
         
         // Send to backend test endpoint
         Task {
-            let result = await sendTestMessage(message: message)
+            let conversationForRequest = conversationStore.currentConversation ?? conversation
+            let result = await sendTestMessage(conversation: conversationForRequest)
             
             await MainActor.run {
                 self.isLoading = false
@@ -305,8 +306,8 @@ struct ChatView: View {
         }
     }
     
-    private func sendTestMessage(message: String) async -> Result<ChatResponse, Error> {
-        let result = await backendService.sendTestMessage(message: message)
+    private func sendTestMessage(conversation: Conversation) async -> Result<ChatResponse, Error> {
+        let result = await backendService.sendTestMessage(conversation: conversation)
         
         switch result {
         case .success(let response):

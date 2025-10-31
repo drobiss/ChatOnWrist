@@ -83,9 +83,19 @@ class BackendService: ObservableObject {
         return await makeRequest(endpoint: endpoint, method: "POST", body: request, authToken: deviceToken)
     }
 
-    func sendTestMessage(message: String) async -> Result<ChatResponse, BackendError> {
+    func sendTestMessage(conversation: Conversation) async -> Result<ChatResponse, BackendError> {
         let endpoint = "/chat/test"
-        let request = TestChatRequest(message: message)
+        let recentMessages = Array(conversation.messages.suffix(20))
+        let history = recentMessages.map { message -> ChatMessagePayload in
+            ChatMessagePayload(
+                role: message.isFromUser ? "user" : "assistant",
+                content: message.content
+            )
+        }
+        let request = TestChatRequest(
+            message: recentMessages.last(where: { $0.isFromUser })?.content,
+            conversation: history
+        )
         
         return await makeRequest(endpoint: endpoint, method: "POST", body: request)
     }
@@ -210,7 +220,13 @@ struct ChatRequest: Codable {
 }
 
 struct TestChatRequest: Codable {
-    let message: String
+    let message: String?
+    let conversation: [ChatMessagePayload]
+}
+
+struct ChatMessagePayload: Codable {
+    let role: String
+    let content: String
 }
 
 struct ChatResponse: Codable {

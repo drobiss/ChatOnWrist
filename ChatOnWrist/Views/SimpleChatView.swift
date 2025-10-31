@@ -13,6 +13,7 @@ struct SimpleChatView: View {
     @State private var isLoading = false
     @StateObject private var backendService = BackendService()
     @StateObject private var watchConnectivity = WatchConnectivityService()
+    @State private var conversationHistory: [Message] = []
     
     var body: some View {
         NavigationView {
@@ -201,16 +202,18 @@ struct SimpleChatView: View {
         messages.append("You: \(message)")
         messageText = ""
         isLoading = true
+        let userMessage = Message(content: message, isFromUser: true)
+        conversationHistory.append(userMessage)
         
         // Send message to Watch if connected
         if watchConnectivity.isWatchReachable {
-            let watchMessage = Message(content: message, isFromUser: true)
-            watchConnectivity.sendMessageToWatch(watchMessage, conversationId: "current")
+            watchConnectivity.sendMessageToWatch(userMessage, conversationId: "current")
         }
         
         // Call real backend API
         Task {
-            let result = await backendService.sendTestMessage(message: message)
+            let conversation = Conversation(title: "Simple Chat", messages: conversationHistory)
+            let result = await backendService.sendTestMessage(conversation: conversation)
             
             await MainActor.run {
                 isLoading = false
@@ -219,15 +222,18 @@ struct SimpleChatView: View {
                 case .success(let response):
                     let aiResponse = "AI: \(response.response)"
                     messages.append(aiResponse)
+                    let aiMessage = Message(content: response.response, isFromUser: false)
+                    conversationHistory.append(aiMessage)
                     
                     // Send AI response to Watch if connected
                     if watchConnectivity.isWatchReachable {
-                        let watchMessage = Message(content: response.response, isFromUser: false)
-                        watchConnectivity.sendMessageToWatch(watchMessage, conversationId: "current")
+                        watchConnectivity.sendMessageToWatch(aiMessage, conversationId: "current")
                     }
                 case .failure(let error):
                     let errorMessage = "AI: Error - \(error.localizedDescription)"
                     messages.append(errorMessage)
+                    let aiMessage = Message(content: errorMessage, isFromUser: false)
+                    conversationHistory.append(aiMessage)
                 }
             }
         }

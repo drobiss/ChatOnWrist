@@ -14,22 +14,36 @@ const baseSystemPrompt = `You are ChatOnWrist, a concise, context-aware AI assis
 
 router.post('/test', async (req, res) => {
     try {
-        const { message } = req.body;
+        const { message, conversation } = req.body;
         
-        if (!message) {
-            return res.status(400).json({ error: 'Message is required' });
+        if ((!message || message.trim().length === 0) && (!Array.isArray(conversation) || conversation.length === 0)) {
+            return res.status(400).json({ error: 'Message or conversation history is required' });
         }
         
-        // Call OpenAI API
-        const axios = require('axios');
+        const configuredTemperature = parseFloat(process.env.OPENAI_TEMPERATURE);
+        const temperature = Number.isFinite(configuredTemperature) ? configuredTemperature : 0.3;
+        const configuredMaxTokens = parseInt(process.env.OPENAI_MAX_TOKENS, 10);
+        const maxTokens = Number.isInteger(configuredMaxTokens) ? configuredMaxTokens : 200;
+
+        const conversationMessages = Array.isArray(conversation) ? conversation : [];
+        const hasUserMessage = conversationMessages.some(msg => msg?.role === 'user');
+
+        const messages = [
+            { role: 'system', content: baseSystemPrompt },
+            ...conversationMessages
+                .filter(msg => msg && typeof msg.content === 'string' && typeof msg.role === 'string')
+                .map(msg => ({
+                    role: msg.role === 'assistant' ? 'assistant' : 'user',
+                    content: msg.content
+                })),
+            ...(!hasUserMessage && message ? [{ role: 'user', content: message }] : [])
+        ];
+
         const openaiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: 'gpt-4o',
-            messages: [
-                { role: 'system', content: baseSystemPrompt },
-                { role: 'user', content: message }
-            ],
-            max_tokens: 150,
-            temperature: 0.3
+            model: process.env.OPENAI_MODEL || 'gpt-4o',
+            messages,
+            max_tokens: maxTokens,
+            temperature
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,

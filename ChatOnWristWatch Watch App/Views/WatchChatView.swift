@@ -356,6 +356,7 @@ struct WatchChatView: View {
         dictatedText = ""
         
         Task {
+            let conversationForRequest = conversationStore.currentConversation ?? conversation
             let result: Result<ChatResponse, BackendError>
             if let token = authService.deviceToken, !token.isEmpty {
                 result = await backendService.sendMessage(
@@ -364,7 +365,7 @@ struct WatchChatView: View {
                     deviceToken: token
                 )
             } else {
-                result = await backendService.sendTestMessage(message: trimmed)
+                result = await backendService.sendTestMessage(conversation: conversationForRequest)
             }
             
             await MainActor.run {

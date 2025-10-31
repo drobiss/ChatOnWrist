@@ -62,13 +62,30 @@ struct WatchHomeView: View {
                     ZStack {
                         // Soft glow ring with opacity breathing (no scaling to avoid drift)
                         Circle()
-                            .strokeBorder(Color.white.opacity(0.25), lineWidth: 2)
+                            .strokeBorder(Color.white.opacity(pulse ? 0.42 : 0.2), lineWidth: pulse ? 3 : 2)
                             .frame(width: 120, height: 120)
                             .overlay(
                                 Circle()
-                                    .fill(Color.white.opacity(pulse ? 0.14 : 0.06))
-                                    .frame(width: 120, height: 120)
-                                    .blur(radius: 6)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.32),
+                                                Color.white.opacity(0.08)
+                                            ],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        ),
+                                        lineWidth: 5
+                                    )
+                                    .scaleEffect(pulse ? 1.06 : 0.97)
+                                    .opacity(pulse ? 0.36 : 0.16)
+                                    .blur(radius: 2)
+                            )
+                            .overlay(
+                                Circle()
+                                    .fill(Color.white.opacity(pulse ? 0.18 : 0.06))
+                                    .frame(width: 122, height: 122)
+                                    .blur(radius: 9)
                             )
                         
                         Button(action: startVoiceAndOpenChat) {

@@ -32,143 +32,34 @@ struct WatchHistoryView: View {
             )
             .ignoresSafeArea()
             
-            VStack {
-                // Sync status - glassmorphism
-                if syncService.isSyncing {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                            .tint(.white)
-                        Text("Syncing...")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(.ultraThinMaterial)
-                                .opacity(0.4)
-                            
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.3),
-                                            Color.white.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 0.8
-                                )
+            VStack(spacing: 16) {
+                historyHeader
+                
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        if conversationStore.conversations.isEmpty {
+                            EmptyHistoryState(onSync: syncService.requestSyncFromiPhone)
+                                .padding(.top, 24)
+                        } else {
+                            ForEach(conversationStore.conversations) { conversation in
+                                Button {
+                                    guard !isDetailSheetPresented else { return }
+                                    selectedConversation = conversation
+                                    isDetailSheetPresented = true
+                                } label: {
+                                    WatchConversationCard(conversation: conversation)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                    )
-                    .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1.5)
-                    .shadow(color: .white.opacity(0.05), radius: 1, x: 0, y: 0.5)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
                 }
                 
-                List {
-                    if conversationStore.conversations.isEmpty {
-                        VStack(spacing: 16) {
-                            Spacer()
-                            
-                            VStack(spacing: 12) {
-                                Image(systemName: "clock.badge.xmark")
-                                    .font(.system(size: 32))
-                                    .foregroundColor(.white.opacity(0.6))
-                                
-                                Text("No history")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.8))
-                                
-                                Button("Sync from iPhone") {
-                                    syncService.requestSyncFromiPhone()
-                                }
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
-                                .background(
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(.ultraThinMaterial)
-                                            .opacity(0.6)
-                                        
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.white.opacity(0.15),
-                                                        Color.white.opacity(0.05)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                        
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.white.opacity(0.3),
-                                                        Color.white.opacity(0.1)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                lineWidth: 0.8
-                                            )
-                                    }
-                                )
-                                .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1.5)
-                                .shadow(color: .white.opacity(0.05), radius: 1, x: 0, y: 0.5)
-                            }
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 20)
-                            .background(
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(.ultraThinMaterial)
-                                        .opacity(0.3)
-                                    
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.2),
-                                                    Color.white.opacity(0.05)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 0.5
-                                        )
-                                }
-                            )
-                            
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 250)
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(conversationStore.conversations) { conversation in
-                            WatchConversationRow(conversation: conversation)
-                                .listRowBackground(Color.clear)
-                                .onTapGesture {
-                                    guard !isDetailSheetPresented else { return }
-                                    isDetailSheetPresented = true
-                                    selectedConversation = conversation
-                                }
-                        }
-                    }
-                }
-                .background(Color.clear)
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                actionBar
             }
+            .padding(.top, 12)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -182,104 +73,254 @@ struct WatchHistoryView: View {
                 }
             }
         }
-        .overlay(
-            VStack {
-                Spacer()
-                HStack {
-                    Button(action: {
-                        conversationStore.deleteAllConversations()
-                    }) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 12))
-                            .foregroundColor(.red)
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        syncService.requestSyncFromiPhone()
-                    }) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12))
-                            .foregroundColor(syncService.isSyncing ? .gray : .blue)
-                    }
-                    .disabled(syncService.isSyncing)
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
-            }
-            , alignment: .bottom
-        )
         .sheet(item: $selectedConversation, onDismiss: {
             isDetailSheetPresented = false
         }) { conversation in
             WatchConversationDetailView(conversation: conversation)
         }
     }
+    
+    private var historyHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Conversation History")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer(minLength: 8)
+                if syncService.isSyncing {
+                    SyncPillView(text: "Syncing…", systemImage: "arrow.triangle.2.circlepath")
+                } else if let lastSync = syncService.lastSyncDate {
+                    SyncPillView(
+                        text: lastSync.relativeTimeString,
+                        systemImage: "clock.arrow.2.circlepath"
+                    )
+                }
+            }
+            
+            HStack(spacing: 8) {
+                Label("\(conversationStore.conversations.count) chats", systemImage: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.75))
+                
+                if let latestDate = mostRecentConversationDate() {
+                    Text("Updated \(latestDate.relativeTimeString)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.55))
+                }
+                
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+    
+    private var actionBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                conversationStore.deleteAllConversations()
+            } label: {
+                Label("Clear", systemImage: "trash")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.red.opacity(0.35))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.red.opacity(0.55), lineWidth: 0.6)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            
+            Button {
+                syncService.requestSyncFromiPhone()
+            } label: {
+                Label(syncService.isSyncing ? "Syncing…" : "Sync", systemImage: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.black.opacity(0.85))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(syncService.isSyncing ? 0.35 : 0.85))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 0.6)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(syncService.isSyncing)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+    }
+    
+    private func mostRecentConversationDate() -> Date? {
+        conversationStore.conversations
+            .compactMap { conversation in
+                conversation.messages.last?.timestamp
+                    ?? conversation.messages.first?.timestamp
+                    ?? conversation.createdAt
+            }
+            .sorted(by: >)
+            .first
+    }
 }
 
-struct WatchConversationRow: View {
+private struct SyncPillView: View {
+    var text: String
+    var systemImage: String
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10, weight: .medium))
+            Text(text)
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(0.45)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.25), lineWidth: 0.6)
+                )
+        )
+        .foregroundColor(.white.opacity(0.8))
+    }
+}
+
+private struct EmptyHistoryState: View {
+    var onSync: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "clock.fill")
+                .font(.system(size: 32))
+                .foregroundColor(.white.opacity(0.65))
+                .padding(10)
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.35)
+                )
+            
+            Text("No conversations yet")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+            
+            Text("Start a new chat or sync your latest conversations from the iPhone app.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+            
+            Button(action: onSync) {
+                Label("Sync from iPhone", systemImage: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.black.opacity(0.85))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.85))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.white.opacity(0.4), lineWidth: 0.6)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(0.35)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 0.6)
+                )
+        )
+    }
+}
+
+struct WatchConversationCard: View {
     let conversation: Conversation
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(conversation.title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white)
-                .lineLimit(1)
-            
-            if let lastMessage = conversation.messages.last {
-                Text(lastMessage.content)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .lineLimit(2)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(conversation.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    if let lastMessage = conversation.messages.last {
+                        Text(lastMessage.content)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                            .lineLimit(2)
+                    } else {
+                        Text("No messages yet")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                }
+                
+                Spacer(minLength: 6)
+                
+                if let lastTimestamp = conversation.messages.last?.timestamp {
+                    Text(lastTimestamp.relativeTimeString)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.6))
+                }
             }
             
-            Text(conversation.createdAt, style: .relative)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
+            HStack(spacing: 8) {
+                Label("\(conversation.messages.count) msgs", systemImage: "bubble.left.and.text.bubble.right.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.75))
+                
+                if let firstMessage = conversation.messages.first {
+                    Text("Started " + firstMessage.timestamp.relativeTimeString)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.45))
+                }
+                
+                Spacer()
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(
-            ZStack {
-                // Glass effect
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.4)
-                
-                // Subtle gradient overlay
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.1),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.18),
+                            Color.white.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-                
-                // Border
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.25),
-                                Color.white.opacity(0.08)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.6
-                    )
-            }
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.22), lineWidth: 0.6)
+                )
+                .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
+                .shadow(color: .white.opacity(0.05), radius: 2, x: 0, y: 1)
         )
-        .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-        .shadow(color: .white.opacity(0.03), radius: 0.5, x: 0, y: 0.25)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
     }
 }
 
@@ -305,14 +346,31 @@ struct WatchConversationDetailView: View {
             )
             .ignoresSafeArea()
             
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(conversation.messages) { message in
-                        WatchMessageBubble(message: message)
+            VStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(conversation.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                    
+                    if let lastMessage = conversation.messages.last {
+                        Text("Last reply \(lastMessage.timestamp.relativeTimeString)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.55))
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(conversation.messages) { message in
+                            WatchMessageBubble(message: message)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 16)
+                }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -333,4 +391,20 @@ struct WatchConversationDetailView: View {
 #Preview {
     WatchHistoryView()
         .environmentObject(ConversationStore())
+}
+
+// MARK: - Helpers
+
+private extension Date {
+    var relativeTimeString: String {
+        RelativeDateTimeFormatter.watchFormatter.localizedString(for: self, relativeTo: Date())
+    }
+}
+
+private extension RelativeDateTimeFormatter {
+    static let watchFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
 }
