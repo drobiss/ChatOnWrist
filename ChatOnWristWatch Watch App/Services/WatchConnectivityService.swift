@@ -236,4 +236,6 @@ extension Notification.Name {
     static let iphoneConversationReceived = Notification.Name("iphoneConversationReceived")
     static let iphoneMessageReceived = Notification.Name("iphoneMessageReceived")
     static let iphoneUserTokenReceived = Notification.Name("iphoneUserTokenReceived")
+    static let conversationCreated = Notification.Name("conversationCreated")
 }
+

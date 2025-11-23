@@ -6,13 +6,15 @@
 //
 
 import Foundation
+import SwiftData
 
-struct Conversation: Identifiable, Codable {
-    let id: UUID
+@Model
+final class Conversation: Identifiable {
+    @Attribute(.unique) var id: UUID
     var title: String
-    let createdAt: Date
-    var messages: [Message]
+    var createdAt: Date
     var remoteId: String?
+    @Relationship(deleteRule: .cascade, inverse: \Message.conversation) var messages: [Message]
     
     init(title: String = "", messages: [Message] = [], remoteId: String? = nil) {
         self.id = UUID()
@@ -23,16 +25,19 @@ struct Conversation: Identifiable, Codable {
     }
 }
 
-struct Message: Identifiable, Codable {
-    let id: UUID
-    let content: String
-    let isFromUser: Bool
-    let timestamp: Date
+@Model
+final class Message: Identifiable {
+    @Attribute(.unique) var id: UUID
+    var content: String
+    var isFromUser: Bool
+    var timestamp: Date
+    var conversation: Conversation?
     
     init(content: String, isFromUser: Bool) {
         self.id = UUID()
         self.content = content
         self.isFromUser = isFromUser
         self.timestamp = Date()
+        self.conversation = nil
     }
 }

@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 
+@MainActor
 class ConversationSyncService: ObservableObject {
     static let shared = ConversationSyncService()
     
@@ -15,13 +16,15 @@ class ConversationSyncService: ObservableObject {
     @Published var lastSyncDate: Date?
     
     private let watchConnectivity: WatchConnectivityService
-    private let conversationStore: ConversationStore
+    private var conversationStore: ConversationStore?
     private var cancellables = Set<AnyCancellable>()
+    
+    // Track conversations we've synced to prevent loops
+    private var recentlySyncedConversationIds = Set<UUID>()
+    private var isProcessingIncomingSync = false
     
     private init() {
         self.watchConnectivity = WatchConnectivityService()
-        self.conversationStore = ConversationStore()
-        
         setupNotificationObservers()
     }
     
@@ -40,76 +43,94 @@ class ConversationSyncService: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // Listen for conversation changes with debouncing to prevent excessive syncing
-        conversationStore.$conversations
-            .debounce(for: DispatchQueue.SchedulerTimeType.Stride.seconds(2), scheduler: DispatchQueue.main)
-            .sink { [weak self] conversations in
-                self?.syncConversationsToiPhone(conversations)
+        // conversation change observer configured once store is attached
+    }
+    
+    func configure(conversationStore: ConversationStore) {
+        guard self.conversationStore !== conversationStore else { return }
+        self.conversationStore = conversationStore
+        
+        // REMOVED: Publisher-based sync causes infinite loops
+        // Instead, we rely only on notifications for explicit sync events
+        
+        // Listen for new conversation creation (only locally created ones)
+        NotificationCenter.default.publisher(for: .conversationCreated)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let userInfo = notification.userInfo,
+                      let conversation = userInfo["conversation"] as? Conversation,
+                      self.watchConnectivity.isPhoneReachable,
+                      !self.recentlySyncedConversationIds.contains(conversation.id) else { return }
+                
+                // Mark as synced
+                self.recentlySyncedConversationIds.insert(conversation.id)
+                
+                // Immediately sync new conversation to iPhone
+                self.watchConnectivity.sendConversationToiPhone(conversation)
+                
+                // Remove from tracking after 30 seconds (longer to prevent loops)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                    self.recentlySyncedConversationIds.remove(conversation.id)
+                }
             }
             .store(in: &cancellables)
     }
     
     private func handleiPhoneMessage(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
+        guard let conversationStore,
+              let userInfo = notification.userInfo,
               let message = userInfo["message"] as? Message,
               let conversationId = userInfo["conversationId"] as? String else { return }
+        
+        // Mark that we're processing incoming sync to prevent re-syncing
+        isProcessingIncomingSync = true
         
         // Find or create conversation
         if let conversation = conversationStore.getConversation(by: UUID(uuidString: conversationId) ?? UUID()) {
             conversationStore.addMessage(message, to: conversation)
         } else {
-            // Create new conversation if it doesn't exist
             let newConversation = Conversation(title: "iPhone Conversation", messages: [message])
-            conversationStore.conversations.insert(newConversation, at: 0)
-            conversationStore.currentConversation = newConversation
+            conversationStore.insertConversation(newConversation)
+            
+            // Mark as synced to prevent re-syncing back
+            recentlySyncedConversationIds.insert(newConversation.id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                self.recentlySyncedConversationIds.remove(newConversation.id)
+            }
+        }
+        
+        // Allow syncing again after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.isProcessingIncomingSync = false
         }
         
         lastSyncDate = Date()
     }
     
     private func handleiPhoneConversation(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
+        guard let conversationStore,
+              let userInfo = notification.userInfo,
               let conversation = userInfo["conversation"] as? Conversation else { return }
         
-        // Check if conversation already exists
-        if conversationStore.getConversation(by: conversation.id) == nil {
-            conversationStore.conversations.insert(conversation, at: 0)
-            conversationStore.currentConversation = conversation
+        // Mark that we're processing incoming sync to prevent re-syncing
+        isProcessingIncomingSync = true
+        
+        // Insert conversation if it doesn't exist
+        conversationStore.insertConversationIfNeeded(conversation)
+        
+        // Mark this conversation as recently synced to prevent re-syncing it back
+        recentlySyncedConversationIds.insert(conversation.id)
+        
+        // Remove from tracking after 30 seconds (longer to prevent loops)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+            self.recentlySyncedConversationIds.remove(conversation.id)
+        }
+        
+        // Allow syncing again after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.isProcessingIncomingSync = false
         }
         
         lastSyncDate = Date()
-    }
-    
-    private func syncConversationsToiPhone(_ conversations: [Conversation]) {
-        guard watchConnectivity.isPhoneReachable else { 
-            print("⌚ Phone not reachable, skipping sync")
-            return 
-        }
-        
-        guard !conversations.isEmpty else { return }
-        
-        isSyncing = true
-        
-        // Send only recent conversations to reduce load
-        let recentConversations = Array(conversations.prefix(5))
-        print("⌚ Syncing \(recentConversations.count) conversations to iPhone")
-        
-        for conversation in recentConversations {
-            watchConnectivity.sendConversationToiPhone(conversation)
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.isSyncing = false
-            self.lastSyncDate = Date()
-        }
-    }
-    
-    func requestSyncFromiPhone() {
-        guard watchConnectivity.isPhoneReachable else { return }
-        watchConnectivity.requestConversationFromiPhone()
-    }
-    
-    func forceSync() {
-        requestSyncFromiPhone()
     }
 }

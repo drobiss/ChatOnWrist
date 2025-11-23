@@ -8,15 +8,55 @@
 import Foundation
 import Combine
 
+@MainActor
 class BackendService: ObservableObject {
     @Published var isConnected = false
     @Published var errorMessage: String?
+    @Published var lastConnectionTest: Date?
     
     private let session = URLSession.shared
     private let baseURL: String
     
     init(baseURL: String = AppConfig.backendBaseURL) {
         self.baseURL = baseURL
+        // Don't auto-test connection on init to avoid blocking authentication
+    }
+    
+    // MARK: - Connection Testing
+    
+    func testConnection() async {
+        
+        guard let url = URL(string: baseURL + "/health") else {
+            await MainActor.run {
+                self.isConnected = false
+                self.errorMessage = "Invalid backend URL"
+            }
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10.0
+        
+        do {
+            let (_, response) = try await session.data(for: request)
+            
+            await MainActor.run {
+                self.lastConnectionTest = Date()
+                if let httpResponse = response as? HTTPURLResponse {
+                    self.isConnected = httpResponse.statusCode == 200
+                    self.errorMessage = self.isConnected ? nil : "Backend returned status \(httpResponse.statusCode)"
+                } else {
+                    self.isConnected = false
+                    self.errorMessage = "Invalid response from backend"
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.isConnected = false
+                self.errorMessage = "Connection failed: \(error.localizedDescription)"
+            }
+        }
     }
     
     // MARK: - Authentication
@@ -44,7 +84,7 @@ class BackendService: ObservableObject {
         return await makeRequest(endpoint: endpoint, method: "POST", body: request, authToken: deviceToken)
     }
 
-    func sendTestMessage(conversation: Conversation) async -> Result<ChatResponse, BackendError> {
+    func sendTestMessage(message: String, conversation: Conversation) async -> Result<ChatResponse, BackendError> {
         let endpoint = "/chat/test"
         let recentMessages = Array(conversation.messages.suffix(20))
         let history = recentMessages.map { message -> ChatMessagePayload in
@@ -54,10 +94,10 @@ class BackendService: ObservableObject {
             )
         }
         let request = TestChatRequest(
-            message: recentMessages.last(where: { $0.isFromUser })?.content,
+            message: message,
             conversation: history
         )
-
+        
         return await makeRequest(endpoint: endpoint, method: "POST", body: request)
     }
     
@@ -85,6 +125,7 @@ class BackendService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 15.0
         request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
@@ -119,6 +160,7 @@ class BackendService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.timeoutInterval = 30.0
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         if let authToken = authToken {
@@ -145,7 +187,7 @@ class BackendService: ObservableObject {
                 return .success(decodedResponse)
             } else {
                 let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data)
-                return .failure(.serverError(errorResponse?.message ?? "Unknown error"))
+                return .failure(.serverError(errorResponse?.message ?? "HTTP \(httpResponse.statusCode)"))
             }
         } catch {
             return .failure(.networkError(error.localizedDescription))
@@ -215,10 +257,6 @@ struct MessageResponse: Codable {
 struct ErrorResponse: Codable {
     let message: String
     let code: String
-}
-
-struct EmptyBody: Codable {
-    // Empty body for GET requests
 }
 
 // MARK: - Error Types

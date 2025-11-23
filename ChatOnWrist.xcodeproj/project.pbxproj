@@ -12,6 +12,9 @@
 		63158B842EAA18E7008E5611 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 63158B832EAA18E7008E5611 /* AVFoundation.framework */; };
 		63158B862EAA192B008E5611 /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 63158B852EAA192B008E5611 /* WatchConnectivity.framework */; };
 		63C6583D2EA8D0F900FAEC27 /* ChatOnWristWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 63C658332EA8D0F600FAEC27 /* ChatOnWristWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		63D757AE2ECC93880096557B /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 63D757AD2ECC93880096557B /* WidgetKit.framework */; };
+		63D757B02ECC93880096557B /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 63D757AF2ECC93880096557B /* SwiftUI.framework */; };
+		63D757BF2ECC938B0096557B /* ChatOnWristWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 63D757AC2ECC93880096557B /* ChatOnWristWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -21,6 +24,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 63C658322EA8D0F600FAEC27;
 			remoteInfo = "ChatOnWristWatch Watch App";
+		};
+		63D757BD2ECC938B0096557B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 63C658192EA8CDC700FAEC27 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 63D757AB2ECC93880096557B;
+			remoteInfo = ChatOnWristWidgetExtensionExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -36,6 +46,17 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		63D757C42ECC938B0096557B /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				63D757BF2ECC938B0096557B /* ChatOnWristWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -45,7 +66,20 @@
 		63158B852EAA192B008E5611 /* WatchConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchConnectivity.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS26.0.sdk/System/Library/Frameworks/WatchConnectivity.framework; sourceTree = DEVELOPER_DIR; };
 		63C658212EA8CDC700FAEC27 /* ChatOnWrist.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChatOnWrist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		63C658332EA8D0F600FAEC27 /* ChatOnWristWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ChatOnWristWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		63D757AC2ECC93880096557B /* ChatOnWristWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ChatOnWristWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		63D757AD2ECC93880096557B /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		63D757AF2ECC93880096557B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		63D757C02ECC938B0096557B /* Exceptions for "ChatOnWristWidgetExtension" folder in "ChatOnWristWidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 63D757AB2ECC93880096557B /* ChatOnWristWidgetExtensionExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		63C658232EA8CDC700FAEC27 /* ChatOnWrist */ = {
@@ -56,6 +90,14 @@
 		63C658342EA8D0F600FAEC27 /* ChatOnWristWatch Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "ChatOnWristWatch Watch App";
+			sourceTree = "<group>";
+		};
+		63D757B12ECC93880096557B /* ChatOnWristWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				63D757C02ECC938B0096557B /* Exceptions for "ChatOnWristWidgetExtension" folder in "ChatOnWristWidgetExtensionExtension" target */,
+			);
+			path = ChatOnWristWidgetExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -79,6 +121,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		63D757A92ECC93880096557B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				63D757B02ECC93880096557B /* SwiftUI.framework in Frameworks */,
+				63D757AE2ECC93880096557B /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -89,6 +140,8 @@
 				63158B812EAA1831008E5611 /* AVFoundation.framework */,
 				63158B832EAA18E7008E5611 /* AVFoundation.framework */,
 				63158B7F2EAA180F008E5611 /* AuthenticationServices.framework */,
+				63D757AD2ECC93880096557B /* WidgetKit.framework */,
+				63D757AF2ECC93880096557B /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -98,6 +151,7 @@
 			children = (
 				63C658232EA8CDC700FAEC27 /* ChatOnWrist */,
 				63C658342EA8D0F600FAEC27 /* ChatOnWristWatch Watch App */,
+				63D757B12ECC93880096557B /* ChatOnWristWidgetExtension */,
 				63158B7E2EAA180E008E5611 /* Frameworks */,
 				63C658222EA8CDC700FAEC27 /* Products */,
 			);
@@ -108,6 +162,7 @@
 			children = (
 				63C658212EA8CDC700FAEC27 /* ChatOnWrist.app */,
 				63C658332EA8D0F600FAEC27 /* ChatOnWristWatch Watch App.app */,
+				63D757AC2ECC93880096557B /* ChatOnWristWidgetExtensionExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -146,10 +201,12 @@
 				63C6582F2EA8D0F600FAEC27 /* Sources */,
 				63C658302EA8D0F600FAEC27 /* Frameworks */,
 				63C658312EA8D0F600FAEC27 /* Resources */,
+				63D757C42ECC938B0096557B /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				63D757BE2ECC938B0096557B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				63C658342EA8D0F600FAEC27 /* ChatOnWristWatch Watch App */,
@@ -160,6 +217,28 @@
 			productName = "ChatOnWristWatch Watch App";
 			productReference = 63C658332EA8D0F600FAEC27 /* ChatOnWristWatch Watch App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		63D757AB2ECC93880096557B /* ChatOnWristWidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 63D757C12ECC938B0096557B /* Build configuration list for PBXNativeTarget "ChatOnWristWidgetExtensionExtension" */;
+			buildPhases = (
+				63D757A82ECC93880096557B /* Sources */,
+				63D757A92ECC93880096557B /* Frameworks */,
+				63D757AA2ECC93880096557B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				63D757B12ECC93880096557B /* ChatOnWristWidgetExtension */,
+			);
+			name = ChatOnWristWidgetExtensionExtension;
+			packageProductDependencies = (
+			);
+			productName = ChatOnWristWidgetExtensionExtension;
+			productReference = 63D757AC2ECC93880096557B /* ChatOnWristWidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -175,6 +254,9 @@
 						CreatedOnToolsVersion = 26.0.1;
 					};
 					63C658322EA8D0F600FAEC27 = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
+					63D757AB2ECC93880096557B = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
 				};
@@ -195,6 +277,7 @@
 			targets = (
 				63C658202EA8CDC700FAEC27 /* ChatOnWrist */,
 				63C658322EA8D0F600FAEC27 /* ChatOnWristWatch Watch App */,
+				63D757AB2ECC93880096557B /* ChatOnWristWidgetExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -208,6 +291,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		63C658312EA8D0F600FAEC27 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		63D757AA2ECC93880096557B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -231,6 +321,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		63D757A82ECC93880096557B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -238,6 +335,11 @@
 			isa = PBXTargetDependency;
 			target = 63C658322EA8D0F600FAEC27 /* ChatOnWristWatch Watch App */;
 			targetProxy = 63C6583B2EA8D0F900FAEC27 /* PBXContainerItemProxy */;
+		};
+		63D757BE2ECC938B0096557B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 63D757AB2ECC93880096557B /* ChatOnWristWidgetExtensionExtension */;
+			targetProxy = 63D757BD2ECC938B0096557B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -448,8 +550,9 @@
 				DEVELOPMENT_TEAM = 9P3X2T92AD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "";
+				INFOPLIST_FILE = "ChatOnWristWatch-Watch-App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = ChatOnWristWatch;
+				INFOPLIST_KEY_CLKComplicationPrincipalClass = "$(PRODUCT_MODULE_NAME).ComplicationController";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone to record your voice for AI chat conversations.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to convert your voice to text for AI chat conversations.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
@@ -459,6 +562,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.davidbrezina.ChatOnWrist.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -485,8 +589,9 @@
 				DEVELOPMENT_TEAM = 9P3X2T92AD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "";
+				INFOPLIST_FILE = "ChatOnWristWatch-Watch-App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = ChatOnWristWatch;
+				INFOPLIST_KEY_CLKComplicationPrincipalClass = "$(PRODUCT_MODULE_NAME).ComplicationController";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone to record your voice for AI chat conversations.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to convert your voice to text for AI chat conversations.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
@@ -496,6 +601,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				NEW_SETTING = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.davidbrezina.ChatOnWrist.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -503,6 +609,72 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+		63D757C22ECC938B0096557B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9P3X2T92AD;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChatOnWristWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ChatOnWristWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.davidbrezina.ChatOnWrist.watchkitapp.ChatOnWristWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		63D757C32ECC938B0096557B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9P3X2T92AD;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChatOnWristWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ChatOnWristWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.davidbrezina.ChatOnWrist.watchkitapp.ChatOnWristWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -537,6 +709,15 @@
 			buildConfigurations = (
 				63C6583F2EA8D0F900FAEC27 /* Debug */,
 				63C658402EA8D0F900FAEC27 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		63D757C12ECC938B0096557B /* Build configuration list for PBXNativeTarget "ChatOnWristWidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				63D757C22ECC938B0096557B /* Debug */,
+				63D757C32ECC938B0096557B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

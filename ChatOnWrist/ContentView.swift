@@ -20,6 +20,9 @@ struct ContentView: View {
                 .environmentObject(conversationStore)
                 .environmentObject(watchConnectivity)
                 .environmentObject(syncService)
+                .onAppear {
+                    syncService.configure(conversationStore: conversationStore)
+                }
         } else {
             LoginView()
                 .environmentObject(authService)

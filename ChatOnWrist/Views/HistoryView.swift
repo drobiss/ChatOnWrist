@@ -11,140 +11,129 @@ import AVFoundation
 struct HistoryView: View {
     @EnvironmentObject var conversationStore: ConversationStore
     @EnvironmentObject var watchConnectivity: WatchConnectivityService
-    @StateObject private var syncService = ConversationSyncService.shared
+    @EnvironmentObject var syncService: ConversationSyncService
     @State private var selectedConversation: Conversation?
     @State private var showingSyncStatus = false
     
     var body: some View {
         NavigationView {
             ZStack {
-                // Glassmorphism background
-                Color.black
-                    .ignoresSafeArea()
+                // True black background with subtle glow
+                iOSPalette.background.ignoresSafeArea()
+                iOSPalette.backgroundGlow.ignoresSafeArea()
                 
-                // Subtle gradient overlay
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(0.9),
-                        Color.black.opacity(0.7),
-                        Color.black.opacity(0.9)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-                
-                VStack {
-                    // Connection status bar - glassmorphism style
-                    HStack {
-                        Circle()
-                            .fill(watchConnectivity.isWatchReachable ? Color.green : Color.red)
-                            .frame(width: 8, height: 8)
-                        
-                        Text(watchConnectivity.isWatchReachable ? "Watch Connected" : "Watch Offline")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.7))
-                        
-                        if syncService.isSyncing {
-                            Spacer()
-                            ProgressView()
-                                .scaleEffect(0.6)
-                                .tint(.white)
-                            Text("Syncing...")
-                                .font(.caption2)
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(.ultraThinMaterial)
-                                .opacity(0.3)
-                            
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.05),
-                                            Color.white.opacity(0.02)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.1),
-                                            Color.white.opacity(0.05)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 0.5
-                                )
-                        }
-                    )
-                    .padding(.horizontal)
-                
-                List {
-                    ForEach(conversationStore.conversations) { conversation in
-                        ConversationRow(conversation: conversation)
-                            .onTapGesture {
-                                selectedConversation = conversation
+                VStack(spacing: 0) {
+                    if conversationStore.conversations.isEmpty {
+                        emptyState
+                    } else {
+                        List {
+                            ForEach(conversationStore.conversations) { conversation in
+                                Button {
+                                    selectedConversation = conversation
+                                } label: {
+                                    ConversationRow(conversation: conversation)
+                                }
+                                .buttonStyle(.plain)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowBackground(Color.clear)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        conversationStore.deleteConversation(conversation)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                    .tint(.red)
+                                }
                             }
+                            .onDelete(perform: deleteConversations)
+                        }
+                        .id(conversationStore.conversations.count) // Force refresh when conversations change
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
                     }
-                }
-                .listStyle(PlainListStyle())
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
                 }
                 .refreshable {
                     syncService.forceSync()
                 }
             }
             .navigationTitle("History")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack {
-                        Button(action: {
-                            conversationStore.deleteAllConversations()
-                        }) {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
+                    HStack(spacing: 16) {
+                        if syncService.isSyncing {
+                            ProgressView()
+                                .tint(iOSPalette.accent)
                         }
                         
                         Button(action: {
                             syncService.forceSync()
                         }) {
                             Image(systemName: "arrow.clockwise")
-                                .foregroundColor(syncService.isSyncing ? .gray : .blue)
+                                .foregroundColor(iOSPalette.accent)
                         }
                         .disabled(syncService.isSyncing)
+                        
+                        if !conversationStore.conversations.isEmpty {
+                            Button(action: {
+                                conversationStore.deleteAllConversations()
+                            }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                            }
+                        }
                     }
                 }
             }
             .preferredColorScheme(.dark)
             .onAppear {
-                // Configure navigation bar appearance for dark theme
-                let appearance = UINavigationBarAppearance()
-                appearance.configureWithTransparentBackground()
-                appearance.backgroundColor = UIColor.black.withAlphaComponent(0.8)
-                appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-                appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-                
-                UINavigationBar.appearance().standardAppearance = appearance
-                UINavigationBar.appearance().scrollEdgeAppearance = appearance
-                UINavigationBar.appearance().compactAppearance = appearance
+                configureNavigationBar()
             }
             .sheet(item: $selectedConversation) { conversation in
                 ConversationDetailView(conversation: conversation)
             }
         }
+    }
+    
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "clock")
+                .font(.system(size: 48, weight: .light))
+                .foregroundColor(iOSPalette.accent.opacity(0.6))
+            
+            Text("No conversations")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(iOSPalette.textPrimary)
+            
+            Text("Start a chat to see history")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(iOSPalette.textSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 60)
+    }
+    
+    private func deleteConversations(at offsets: IndexSet) {
+        let conversationsToDelete = offsets.compactMap { index -> Conversation? in
+            guard index < conversationStore.conversations.count else { return nil }
+            return conversationStore.conversations[index]
+        }
+        
+        for conversation in conversationsToDelete {
+            conversationStore.deleteConversation(conversation)
+        }
+    }
+    
+    private func configureNavigationBar() {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundColor = UIColor.clear
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
     }
 }
 
@@ -152,60 +141,35 @@ struct ConversationRow: View {
     let conversation: Conversation
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(conversation.title)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .lineLimit(1)
-            
-            if let lastMessage = conversation.messages.last {
-                Text(lastMessage.content)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .lineLimit(2)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(conversation.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(iOSPalette.textPrimary)
+                    .lineLimit(1)
+                
+                Text(conversation.messages.sorted(by: { $0.timestamp < $1.timestamp }).last?.content ?? "No messages")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(iOSPalette.textSecondary)
+                    .lineLimit(1)
             }
             
-            Text(conversation.createdAt, style: .relative)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
+            Spacer()
+            
+            Text(conversation.messages.sorted(by: { $0.timestamp < $1.timestamp }).last?.timestamp.relativeTimeString ?? conversation.createdAt.relativeTimeString)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(iOSPalette.textTertiary)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
         .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.3)
-                
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.05),
-                                Color.white.opacity(0.02)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.1),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
-                    )
-            }
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(iOSPalette.glassBorder, lineWidth: 0.5)
+                )
         )
-        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
     }
 }
 
@@ -217,94 +181,155 @@ struct ConversationDetailView: View {
     @State private var messageText = ""
     @State private var isSending = false
     @State private var speechSynthesizer = AVSpeechSynthesizer()
+    @Environment(\.dismiss) private var dismiss
+    
+    // Get the current conversation from store to ensure we see updates
+    private var currentConversation: Conversation? {
+        conversationStore.getConversation(by: conversation.id) ?? conversation
+    }
     
     var body: some View {
         NavigationView {
-            VStack {
-                // Messages
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(conversation.messages) { message in
-                            MessageBubble(
-                                message: message.content,
-                                isFromUser: message.isFromUser,
-                                timestamp: message.timestamp
-                            )
-                        }
-                    }
-                    .padding()
-                }
+            ZStack {
+                // True black background with subtle glow
+                iOSPalette.background.ignoresSafeArea()
+                iOSPalette.backgroundGlow.ignoresSafeArea()
                 
-                // Input area
-                HStack {
-                    TextField("Continue conversation...", text: $messageText)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .onSubmit {
-                            sendMessage()
+                VStack(spacing: 0) {
+                    // Messages
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            // Sort messages by timestamp to ensure correct order
+                            // Use currentConversation from store to see real-time updates
+                            if let currentConv = currentConversation {
+                                ForEach(currentConv.messages.sorted(by: { $0.timestamp < $1.timestamp })) { message in
+                                    MessageBubble(message: message)
+                                }
+                            }
+                            
+                            if isSending {
+                                HStack {
+                                    ProgressView()
+                                        .tint(iOSPalette.accent)
+                                    Text("Thinking…")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(iOSPalette.textSecondary)
+                                }
+                                .padding(.vertical, 8)
+                            }
                         }
-                    
-                    Button(action: sendMessage) {
-                        Image(systemName: "paperplane.fill")
-                            .foregroundColor(.blue)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
                     }
-                    .disabled(messageText.isEmpty || isSending)
+                    
+                    // Input area
+                    HStack(spacing: 12) {
+                        TextField("Continue conversation...", text: $messageText)
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(iOSPalette.textPrimary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                            .stroke(iOSPalette.glassBorder, lineWidth: 0.5)
+                                    )
+                            )
+                            .onSubmit {
+                                sendMessage()
+                            }
+                        
+                        Button(action: sendMessage) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    Circle()
+                                        .fill(iOSPalette.accent)
+                                )
+                        }
+                        .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        iOSPalette.background
+                            .ignoresSafeArea(edges: .bottom)
+                    )
                 }
-                .padding()
             }
-            .navigationTitle(conversation.title)
+            .navigationTitle(currentConversation?.title ?? conversation.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        // Dismiss sheet
+                        dismiss()
                     }
+                    .foregroundColor(iOSPalette.accent)
                 }
             }
+            .preferredColorScheme(.dark)
+            .onAppear {
+                configureNavigationBar()
+            }
         }
+    }
+    
+    private func configureNavigationBar() {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundColor = UIColor.clear
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
     }
     
     private func sendMessage() {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
-        let userMessage = Message(content: messageText, isFromUser: true)
-        conversationStore.addMessage(userMessage, to: conversation)
+        // Get the current conversation from store to ensure we're updating the right one
+        guard let currentConv = currentConversation else { return }
+        
+        let trimmedText = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let userMessage = Message(content: trimmedText, isFromUser: true)
+        conversationStore.addMessage(userMessage, to: currentConv)
         
         isSending = true
-        let currentText = messageText
         messageText = ""
         
         // Send via backend test endpoint for now
         Task {
-            let conversationForRequest = conversationStore.currentConversation ?? conversation
-            let result = await sendTestMessage(conversation: conversationForRequest)
+            // Get the updated conversation from store
+            guard let updatedConv = conversationStore.getConversation(by: currentConv.id) else { return }
+            let result = await backendService.sendTestMessage(message: trimmedText, conversation: updatedConv)
             
             await MainActor.run {
                 isSending = false
                 
                 switch result {
                 case .success(let response):
+                    // Get the latest conversation from store
+                    guard let latestConv = conversationStore.getConversation(by: currentConv.id) else { return }
                     let aiMessage = Message(content: response.response, isFromUser: false)
-                    conversationStore.addMessage(aiMessage, to: conversation)
+                    conversationStore.addMessage(aiMessage, to: latestConv)
                     
                     // Speak the response
                     speakText(response.response)
                     
                 case .failure(let error):
+                    // Get the latest conversation from store
+                    guard let latestConv = conversationStore.getConversation(by: currentConv.id) else { return }
                     let errorMessage = Message(content: "Error: \(error.localizedDescription)", isFromUser: false)
-                    conversationStore.addMessage(errorMessage, to: conversation)
+                    conversationStore.addMessage(errorMessage, to: latestConv)
                 }
             }
-        }
-    }
-    
-    private func sendTestMessage(conversation: Conversation) async -> Result<ChatResponse, Error> {
-        let result = await backendService.sendTestMessage(conversation: conversation)
-        
-        switch result {
-        case .success(let response):
-            return .success(response)
-        case .failure(let error):
-            return .failure(error)
         }
     }
     

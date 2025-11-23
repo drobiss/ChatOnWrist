@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 
+@MainActor
 class AuthenticationService: ObservableObject {
     @Published var isAuthenticated = false
     @Published var userAccessToken: String?
@@ -99,3 +100,4 @@ class AuthenticationService: ObservableObject {
         }
     }
 }
+

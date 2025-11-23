@@ -10,7 +10,6 @@ import SwiftUI
 struct SettingsView: View {
     @StateObject private var authService = AuthenticationService()
     @StateObject private var backendService = BackendService()
-    @StateObject private var backendTestService = BackendTestService()
     
     @State private var showingBackendStatus = false
     @State private var showingLogoutAlert = false
@@ -112,7 +111,7 @@ struct SettingsView: View {
                     
                     Button("Test Connection") {
                         Task {
-                            await backendTestService.testConnection()
+                            await backendService.testConnection()
                         }
                     }
                     
@@ -191,3 +190,4 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
 }
+

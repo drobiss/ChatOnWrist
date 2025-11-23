@@ -83,6 +83,8 @@ class WatchConnectivityService: NSObject, ObservableObject {
         switch type {
         case "message":
             handleIncomingMessage(message)
+        case "conversation":
+            handleIncomingConversation(message)
         case "conversationRequest":
             handleConversationRequest()
         case "userTokenRequest":
@@ -90,6 +92,34 @@ class WatchConnectivityService: NSObject, ObservableObject {
         default:
             break
         }
+    }
+    
+    private func handleIncomingConversation(_ message: [String: Any]) {
+        guard let conversationData = message["conversation"] as? [String: Any] else { return }
+        
+        if let conversation = decodeConversation(conversationData) {
+            NotificationCenter.default.post(
+                name: .watchConversationReceived,
+                object: nil,
+                userInfo: ["conversation": conversation]
+            )
+        }
+    }
+    
+    private func decodeConversation(_ data: [String: Any]) -> Conversation? {
+        guard let title = data["title"] as? String,
+              let messagesData = data["messages"] as? [[String: Any]] else { return nil }
+        
+        let messages = messagesData.compactMap { decodeMessage($0) }
+        let id = UUID(uuidString: data["id"] as? String ?? "") ?? UUID()
+        let createdAt = Date(timeIntervalSince1970: data["createdAt"] as? TimeInterval ?? Date().timeIntervalSince1970)
+        let remoteId = data["remoteId"] as? String
+        
+        return Conversation(
+            title: title,
+            messages: messages,
+            remoteId: remoteId
+        )
     }
     
     private func handleIncomingMessage(_ message: [String: Any]) {
@@ -219,6 +249,9 @@ extension WatchConnectivityService: WCSessionDelegate {
 
 extension Notification.Name {
     static let watchMessageReceived = Notification.Name("watchMessageReceived")
+    static let watchConversationReceived = Notification.Name("watchConversationReceived")
     static let watchConversationRequested = Notification.Name("watchConversationRequested")
     static let watchUserTokenRequested = Notification.Name("watchUserTokenRequested")
+    static let conversationCreated = Notification.Name("conversationCreated")
+    static let messageAdded = Notification.Name("messageAdded")
 }

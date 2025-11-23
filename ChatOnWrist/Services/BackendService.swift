@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 
+@MainActor
 class BackendService: ObservableObject {
     @Published var isConnected = false
     @Published var errorMessage: String?
@@ -83,7 +84,7 @@ class BackendService: ObservableObject {
         return await makeRequest(endpoint: endpoint, method: "POST", body: request, authToken: deviceToken)
     }
 
-    func sendTestMessage(conversation: Conversation) async -> Result<ChatResponse, BackendError> {
+    func sendTestMessage(message: String, conversation: Conversation) async -> Result<ChatResponse, BackendError> {
         let endpoint = "/chat/test"
         let recentMessages = Array(conversation.messages.suffix(20))
         let history = recentMessages.map { message -> ChatMessagePayload in
@@ -93,7 +94,7 @@ class BackendService: ObservableObject {
             )
         }
         let request = TestChatRequest(
-            message: recentMessages.last(where: { $0.isFromUser })?.content,
+            message: message,
             conversation: history
         )
         
@@ -124,6 +125,7 @@ class BackendService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 15.0
         request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
@@ -158,6 +160,7 @@ class BackendService: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.timeoutInterval = 30.0
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         if let authToken = authToken {

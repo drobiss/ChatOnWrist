@@ -13,329 +13,233 @@ import WatchKit
 struct WatchChatView: View {
     @EnvironmentObject var conversationStore: ConversationStore
     @EnvironmentObject var authService: AuthenticationService
+    @EnvironmentObject var watchConnectivity: WatchConnectivityService
     @StateObject private var speechService = SpeechService()
     @StateObject private var backendService = BackendService()
     @StateObject private var dictationService = DictationService()
-    @StateObject private var presentationManager = PresentationManager.shared
+    
     @State private var isProcessing = false
-    @State private var dictatedText = ""
     @State private var isDictationActive = false
-    @State private var isSheetPresented = false
     @State private var hasProcessedInitialMessage = false
     @Environment(\.dismiss) private var dismiss
     
     private let initialMessage: String?
+    private let conversationToLoad: Conversation?
     
-    init(initialMessage: String? = nil) {
+    init(initialMessage: String? = nil, conversation: Conversation? = nil) {
         self.initialMessage = initialMessage
+        self.conversationToLoad = conversation
     }
     
     var body: some View {
         ZStack {
-            // Glassmorphism background
-            Color.black
-                .ignoresSafeArea()
+            // True black background
+            WatchPalette.background.ignoresSafeArea()
             
-            // Subtle gradient overlay
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.9),
-                    Color.black.opacity(0.7),
-                    Color.black.opacity(0.9)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Messages area - glassmorphism design
-                ScrollViewReader { proxy in
-                    ScrollView {
+            // Messages area - full screen
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 10) {
                         if let conversation = conversationStore.currentConversation, !conversation.messages.isEmpty {
-                            LazyVStack(alignment: .leading, spacing: 8) {
-                                ForEach(conversation.messages) { message in
-                                    WatchMessageBubble(message: message)
-                                        .id(message.id)
-                                }
+                            // Sort messages by timestamp to ensure correct order
+                            ForEach(conversation.messages.sorted(by: { $0.timestamp < $1.timestamp })) { message in
+                                WatchMessageBubble(message: message)
+                                    .id(message.id)
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 12)
                         } else {
-                            VStack(spacing: 12) {
-                                Spacer()
-                                
-                                VStack(spacing: 8) {
-                                    Image(systemName: "mic.circle.fill")
-                                        .font(.system(size: 32))
-                                        .foregroundColor(.white.opacity(0.6))
-                                    
-                                    Text("Tap to speak")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.8))
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 16)
-                                .background(
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .fill(.ultraThinMaterial)
-                                            .opacity(0.3)
-                                        
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.white.opacity(0.2),
-                                                        Color.white.opacity(0.05)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                lineWidth: 0.5
-                                            )
-                                    }
-                                )
-                                
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 200)
+                            emptyState
                         }
                         
+                        // Status indicators - matching mobile app style
                         if isProcessing {
-                            HStack(spacing: 8) {
+                            HStack(spacing: 4) {
                                 ProgressView()
-                                    .scaleEffect(0.7)
-                                    .tint(.white)
-                                Text("Thinking...")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.8))
+                                    .tint(WatchPalette.accent)
+                                    .frame(width: 16, height: 16)
+                                Text("Thinking…")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(WatchPalette.textSecondary)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(.ultraThinMaterial)
-                                        .opacity(0.4)
-                                    
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.3),
-                                                    Color.white.opacity(0.1)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 0.8
-                                        )
-                                }
-                            )
-                            .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1.5)
-                            .shadow(color: .white.opacity(0.05), radius: 1, x: 0, y: 0.5)
+                            .padding(.vertical, 8)
                         }
-                        
                         if speechService.isSpeaking {
-                            HStack(spacing: 8) {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.white.opacity(0.8))
-                                Text("Speaking...")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.8))
+                            HStack(spacing: 4) {
+                                ProgressView()
+                                    .tint(WatchPalette.accent)
+                                    .frame(width: 16, height: 16)
+                                Text("Speaking…")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(WatchPalette.textSecondary)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(.ultraThinMaterial)
-                                        .opacity(0.4)
-                                    
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.3),
-                                                    Color.white.opacity(0.1)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 0.8
-                                        )
-                                }
-                            )
-                            .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1.5)
-                            .shadow(color: .white.opacity(0.05), radius: 1, x: 0, y: 0.5)
+                            .padding(.vertical, 8)
                         }
-                    }
-                    .onChange(of: conversationStore.currentConversation?.messages.count) { _, _ in
-                        if let lastMessage = conversationStore.currentConversation?.messages.last {
-                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
-                        }
-                    }
-                }
-                .frame(maxHeight: .infinity)
-                
-                // Bottom control bar - minimalistic
-                VStack(spacing: 8) {
-                    if let error = speechService.errorMessage {
-                        Text(error)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 8)
-                    }
-                    
-                    Button(action: presentDictation) {
-                        HStack(spacing: 8) {
-                            Image(systemName: isDictationActive ? "waveform.circle.fill" : "mic.fill")
-                                .font(.system(size: 16, weight: .medium))
-                            Text(isDictationActive ? "Listening..." : "Tap to Speak")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(
-                            ZStack {
-                                // Glass effect
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.ultraThinMaterial)
-                                    .opacity(0.6)
-                                
-                                // Minimal gradient overlay
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.15),
-                                                Color.white.opacity(0.05)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                
-                                // Border
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.4),
-                                                Color.white.opacity(0.15)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1.0
-                                    )
-                            }
-                        )
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 3)
-                        .shadow(color: .white.opacity(0.1), radius: 2, x: 0, y: 1)
-                    }
-                    .disabled(isProcessing || speechService.isSpeaking || isDictationActive || presentationManager.isAnyPresentationActive)
-                    .buttonStyle(GlassButtonStyle())
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                .background(
-                    ZStack {
-                        // Glass background for control bar
-                        Rectangle()
-                            .fill(.ultraThinMaterial)
-                            .opacity(0.3)
                         
-                        // Subtle gradient overlay
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.2),
-                                        Color.clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
+                        // Bottom padding for mic button
+                        Spacer()
+                            .frame(height: 50)
                     }
-                )
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+                    .padding(.bottom, 12)
+                }
+                .onChange(of: conversationStore.currentConversation?.messages.count) { oldCount, newCount in
+                    guard let newCount, let oldCount, newCount > oldCount,
+                          let lastMessage = conversationStore.currentConversation?.messages.last else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                    }
+                }
             }
+            
+            // Bottom fade/blur overlay - matching top scroll behavior
+            VStack {
+                Spacer()
+                LinearGradient(
+                    colors: [
+                        WatchPalette.background.opacity(0.0),
+                        WatchPalette.background.opacity(0.7),
+                        WatchPalette.background
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 60)
+                .allowsHitTesting(false)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            
+            // Mic button overlay - positioned at bottom right edge
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    micButtonOverlay
+                }
+            }
+            .ignoresSafeArea(edges: .bottom)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(action: {
+                    speechService.stopSpeaking()
                     dismiss()
                 }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
+                        .foregroundColor(WatchPalette.textSecondary)
                 }
             }
         }
         .onAppear {
-            // No auto-presentations, only initialize conversation
-            if conversationStore.currentConversation == nil {
-                _ = conversationStore.createNewConversation()
+            // If a conversation was passed in (from history), set it as current first
+            if let conversation = conversationToLoad {
+                conversationStore.setCurrentConversation(conversation)
+                print("📱 WatchChatView opened with conversation from parameter: \(conversation.title), messages: \(conversation.messages.count)")
             }
             
-            if !hasProcessedInitialMessage {
+            // Debug: Log current conversation state
+            if let current = conversationStore.currentConversation {
+                print("📱 WatchChatView opened with conversation: \(current.title), messages: \(current.messages.count)")
+            } else {
+                print("⚠️ WatchChatView opened with NO current conversation")
+            }
+            
+            // Only create new conversation if we don't have one and no initial message
+            // If coming from history, conversationToLoad should have been set above
+            if conversationStore.currentConversation == nil {
+                if initialMessage == nil {
+                    // No conversation and no initial message - create new one
+                    _ = conversationStore.createNewConversation()
+                    print("📱 Created new conversation")
+                } else {
+                    // Has initial message but no conversation - create one for it
+                    _ = conversationStore.createNewConversation()
+                    print("📱 Created new conversation for initial message")
+                }
+            }
+            
+            // Process initial message if provided (from main screen dictation)
+            if !hasProcessedInitialMessage,
+               let pending = initialMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !pending.isEmpty {
                 hasProcessedInitialMessage = true
-                if let pending = initialMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   !pending.isEmpty {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        sendMessage(text: pending)
-                    }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    sendMessage(text: pending)
                 }
             }
         }
-        .onChange(of: isDictationActive) { _, newValue in
-            // Track dictation state but don't auto-trigger
-            if !newValue {
-                isSheetPresented = false
-            }
+        .onDisappear {
+            // Stop speech when view is dismissed
+            speechService.stopSpeaking()
         }
     }
     
-    private func presentDictation() {
-        // Prevent if already processing, speaking, or if dictation is active
-        guard !isProcessing, !speechService.isSpeaking, !isDictationActive, !isSheetPresented, presentationManager.canPresent() else {
-            print("⚠️ Cannot present dictation - already active or busy or presentation active")
-            return
+    // MARK: - Empty State
+    
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 32, weight: .light))
+                .foregroundColor(WatchPalette.accent.opacity(0.6))
+            
+            Text("Start a conversation")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(WatchPalette.textPrimary)
+            
+            Text("Tap the mic to speak")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(WatchPalette.textSecondary)
         }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .padding(.vertical, 20)
+    }
+    
+    // MARK: - Mic Button Overlay
+    
+    private var micButtonOverlay: some View {
+        Button(action: presentDictation) {
+            Circle()
+                .fill(WatchPalette.accent)
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Image(systemName: isDictationActive ? "waveform" : "mic.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                )
+        }
+        .disabled(isProcessing || speechService.isSpeaking || isDictationActive)
+        .buttonStyle(.plain)
+        .opacity((isProcessing || speechService.isSpeaking) ? 0.5 : 1.0)
+        .padding(.trailing, 4)
+        .padding(.bottom, 18)
+    }
+    
+    
+    // MARK: - Actions
+    
+    private func presentDictation() {
+        guard !isProcessing, !speechService.isSpeaking, !isDictationActive else { return }
         
         isDictationActive = true
-        isSheetPresented = true
-        presentationManager.setPresentationActive(true)
-        let suggestion = dictatedText
         
         #if os(watchOS)
         WKInterfaceDevice.current().play(.start)
         #endif
         
-        dictationService.requestDictation(initialText: suggestion) { result in
+        dictationService.requestDictation(initialText: nil) { result in
             #if os(watchOS)
             WKInterfaceDevice.current().play(.stop)
             #endif
+            
             isDictationActive = false
-            isSheetPresented = false
-            presentationManager.setPresentationActive(false)
             
-            let trimmed = result?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            dictatedText = trimmed
-            guard !trimmed.isEmpty else { return }
+            guard let text = result?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+                return
+            }
             
-            // Small delay before sending to ensure dictation UI is fully dismissed
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                sendMessage(text: trimmed)
+                sendMessage(text: text)
             }
         }
     }
@@ -344,19 +248,30 @@ struct WatchChatView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         
+        // Ensure we have a current conversation
+        // If coming from history, it should already be set
+        // If starting new, create one
         if conversationStore.currentConversation == nil {
+            print("⚠️ No current conversation, creating new one")
             _ = conversationStore.createNewConversation()
         }
-        guard let conversation = conversationStore.currentConversation else { return }
+        
+        guard let conversation = conversationStore.currentConversation else {
+            print("⚠️ Error: Could not get current conversation")
+            return
+        }
+        
+        print("📤 Sending message to conversation: \(conversation.title), current messages: \(conversation.messages.count)")
         
         isProcessing = true
         
         let userMessage = Message(content: trimmed, isFromUser: true)
         conversationStore.addMessage(userMessage, to: conversation)
-        dictatedText = ""
+        
+        // Sync message to iPhone
+        watchConnectivity.sendMessageToiPhone(userMessage, conversationId: conversation.id.uuidString)
         
         Task {
-            let conversationForRequest = conversationStore.currentConversation ?? conversation
             let result: Result<ChatResponse, BackendError>
             if let token = authService.deviceToken, !token.isEmpty {
                 result = await backendService.sendMessage(
@@ -365,138 +280,90 @@ struct WatchChatView: View {
                     deviceToken: token
                 )
             } else {
-                result = await backendService.sendTestMessage(conversation: conversationForRequest)
+                let updatedConversation = conversationStore.currentConversation ?? conversation
+                result = await backendService.sendTestMessage(message: trimmed, conversation: updatedConversation)
             }
             
             await MainActor.run {
                 isProcessing = false
                 
+                // Always use current conversation from store to ensure we have the latest instance
+                guard let currentConversation = conversationStore.currentConversation else {
+                    print("⚠️ Error: No current conversation when processing AI response")
+                    return
+                }
+                
                 switch result {
                 case .success(let response):
                     let aiMessage = Message(content: response.response, isFromUser: false)
-                    conversationStore.addMessage(aiMessage, to: conversation)
+                    conversationStore.addMessage(aiMessage, to: currentConversation)
+                    
+                    // Sync AI response to iPhone (just the message, not the whole conversation)
+                    // The conversation will be synced when it's created, messages sync individually
+                    watchConnectivity.sendMessageToiPhone(aiMessage, conversationId: currentConversation.id.uuidString)
                     
                     if let token = authService.deviceToken, !token.isEmpty {
-                        conversationStore.updateRemoteId(response.conversationId, for: conversation.id)
+                        conversationStore.updateRemoteId(response.conversationId, for: currentConversation.id)
                     }
                     
                     speechService.speak(response.response)
                     
                 case .failure(let error):
                     let errorMessage = Message(content: "Error: \(error.localizedDescription)", isFromUser: false)
-                    conversationStore.addMessage(errorMessage, to: conversation)
+                    conversationStore.addMessage(errorMessage, to: currentConversation)
                 }
             }
         }
     }
 }
 
+// MARK: - Message Bubble
+
 struct WatchMessageBubble: View {
     let message: Message
+    @StateObject private var preferences = AppPreferences.shared
     
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             if message.isFromUser {
-                Spacer(minLength: 24)
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(message.content)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(
-                            ZStack {
-                                // Glass effect
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.ultraThinMaterial)
-                                    .opacity(0.6)
-                                
-                                // Minimal gradient overlay
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                
-                                // Border
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.4),
-                                                Color.white.opacity(0.2)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 0.8
-                                    )
-                            }
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1.5)
-                        .shadow(color: .white.opacity(0.05), radius: 1, x: 0, y: 0.5)
-                }
+                Spacer(minLength: 20)
+                
+                Text(message.content)
+                    .font(.system(size: preferences.fontSize, weight: .regular))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(WatchPalette.accent)
+                    )
             } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(message.content)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(
-                            ZStack {
-                                // Glass effect
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.ultraThinMaterial)
-                                    .opacity(0.5)
-                                
-                                // Minimal gradient overlay
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.1),
-                                                Color.white.opacity(0.03)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                
-                                // Border
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.25),
-                                                Color.white.opacity(0.08)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 0.6
-                                    )
-                            }
-                        )
-                        .multilineTextAlignment(.leading)
-                        .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                        .shadow(color: .white.opacity(0.03), radius: 0.5, x: 0, y: 0.25)
-                }
-                Spacer(minLength: 24)
+                Text(message.content)
+                    .font(.system(size: preferences.fontSize, weight: .regular))
+                    .foregroundColor(WatchPalette.textPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color.white.opacity(0.12))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.white.opacity(0.22), lineWidth: 0.5)
+                            )
+                    )
+                
+                Spacer(minLength: 20)
             }
         }
-        .padding(.horizontal, 6)
     }
 }
 
 #Preview {
     WatchChatView(initialMessage: nil)
         .environmentObject(ConversationStore())
+        .environmentObject(AuthenticationService())
 }

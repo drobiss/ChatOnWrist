@@ -9,71 +9,36 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject var conversationStore: ConversationStore
+    @EnvironmentObject var authService: AuthenticationService
     
     var body: some View {
-        ZStack {
-            // Glassmorphism background
-            Color.black
-                .ignoresSafeArea()
+        TabView {
+            SimpleChatView()
+                .environmentObject(authService)
+                .tabItem {
+                    Label("Chat", systemImage: "message.fill")
+                }
             
-            // Subtle gradient overlay
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.9),
-                    Color.black.opacity(0.7),
-                    Color.black.opacity(0.9)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            HistoryView()
+                .tabItem {
+                    Label("History", systemImage: "clock.fill")
+                }
             
-            TabView {
-                SimpleChatView()
-                    .tabItem {
-                        Image(systemName: "message")
-                        Text("Chat")
-                    }
-                
-                HistoryView()
-                    .tabItem {
-                        Image(systemName: "clock")
-                        Text("History")
-                    }
-                
-                SettingsView()
-                    .tabItem {
-                        Image(systemName: "gear")
-                        Text("Settings")
-                    }
-            }
-            .accentColor(.white)
-            .preferredColorScheme(.dark)
-            .onAppear {
-                // Configure tab bar appearance for dark theme
-                let appearance = UITabBarAppearance()
-                appearance.configureWithTransparentBackground()
-                appearance.backgroundColor = UIColor.black.withAlphaComponent(0.8)
-                
-                // Tab bar item appearance
-                appearance.stackedLayoutAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.6)
-                appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
-                    .foregroundColor: UIColor.white.withAlphaComponent(0.6)
-                ]
-                
-                appearance.stackedLayoutAppearance.selected.iconColor = UIColor.white
-                appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
-                    .foregroundColor: UIColor.white
-                ]
-                
-                UITabBar.appearance().standardAppearance = appearance
-                UITabBar.appearance().scrollEdgeAppearance = appearance
-            }
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
         }
+        .preferredColorScheme(.dark)
         .onAppear {
-            if conversationStore.currentConversation == nil {
-                _ = conversationStore.createNewConversation()
-            }
+            // Configure tab bar appearance
+            let appearance = UITabBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = .black
+            appearance.shadowColor = .clear
+            
+            UITabBar.appearance().standardAppearance = appearance
+            UITabBar.appearance().scrollEdgeAppearance = appearance
         }
     }
 }
@@ -83,4 +48,3 @@ struct MainTabView: View {
         .environmentObject(ConversationStore())
         .environmentObject(AuthenticationService())
 }
-

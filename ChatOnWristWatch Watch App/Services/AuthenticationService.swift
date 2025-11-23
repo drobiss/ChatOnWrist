@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 
+@MainActor
 class AuthenticationService: ObservableObject {
     @Published var isAuthenticated = false
     @Published var userAccessToken: String?
@@ -63,6 +64,31 @@ class AuthenticationService: ObservableObject {
         
         if let storedDeviceToken = keychain.load(key: "deviceToken") {
             deviceToken = storedDeviceToken
+        }
+    }
+    
+    func authenticateWithBackend(appleIDToken: String) async {
+        await MainActor.run {
+            self.isLoading = true
+            self.errorMessage = nil
+        }
+        
+        print("Starting authentication with backend...")
+        let result = await backendService.authenticateUser(appleIDToken: appleIDToken)
+        
+        await MainActor.run {
+            self.isLoading = false
+            
+            switch result {
+            case .success(let response):
+                print("Authentication successful!")
+                self.userAccessToken = response.userToken
+                self.isAuthenticated = true
+                self.keychain.save(key: "userAccessToken", value: response.userToken)
+            case .failure(let error):
+                print("Authentication failed: \(error.localizedDescription)")
+                self.errorMessage = "Authentication failed: \(error.localizedDescription)"
+            }
         }
     }
 }

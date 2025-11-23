@@ -9,6 +9,7 @@ import Foundation
 import AVFoundation
 import Combine
 
+@MainActor
 class SpeechService: NSObject, ObservableObject {
     @Published var isSpeaking = false
     @Published var errorMessage: String?
@@ -124,6 +125,13 @@ class SpeechService: NSObject, ObservableObject {
             self.synthesizer.speak(utterance)
             print("🔊 Speech started with voice: \(voice.name) (\(voice.language))")
         }
+    }
+    
+    func stopSpeaking() {
+        guard synthesizer.isSpeaking else { return }
+        synthesizer.stopSpeaking(at: .immediate)
+        isSpeaking = false
+        print("🔊 Speech stopped")
     }
     
     // Debug method to list available voices

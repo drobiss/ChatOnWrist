@@ -10,6 +10,7 @@ import AVFoundation
 
 struct VoiceSettingsView: View {
     @StateObject private var speechService = SpeechService()
+    @StateObject private var preferences = AppPreferences.shared
     @State private var selectedVoice: AVSpeechSynthesisVoice?
     @State private var speechRate: Double = 0.45
     @State private var speechVolume: Double = 0.9
@@ -76,7 +77,15 @@ struct VoiceSettingsView: View {
                 }
             }
             
-            Section("Settings") {
+            Section("Display") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Font Size: \(Int(preferences.fontSize))pt")
+                        .font(.system(size: 11))
+                    Slider(value: $preferences.fontSize, in: 10...16, step: 1)
+                }
+            }
+            
+            Section("Voice Settings") {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Speed: \(String(format: "%.2f", speechRate))")
                         .font(.system(size: 11))

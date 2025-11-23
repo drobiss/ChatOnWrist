@@ -10,401 +10,231 @@ import SwiftUI
 struct WatchHistoryView: View {
     @EnvironmentObject var conversationStore: ConversationStore
     @StateObject private var syncService = ConversationSyncService.shared
-    @State private var selectedConversation: Conversation?
-    @State private var isDetailSheetPresented = false
+    @State private var showDeleteAllConfirmation = false
     @Environment(\.dismiss) private var dismiss
     
+    let onConversationSelected: (Conversation) -> Void
+    
+    init(onConversationSelected: @escaping (Conversation) -> Void = { _ in }) {
+        self.onConversationSelected = onConversationSelected
+    }
+    
     var body: some View {
-        ZStack {
-            // Glassmorphism background
-            Color.black
-                .ignoresSafeArea()
-            
-            // Subtle gradient overlay
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.9),
-                    Color.black.opacity(0.7),
-                    Color.black.opacity(0.9)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
-            VStack(spacing: 16) {
-                historyHeader
+            ZStack {
+                // True black background with subtle glow
+                WatchPalette.background.ignoresSafeArea()
+                WatchPalette.backgroundGlow.ignoresSafeArea()
                 
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        if conversationStore.conversations.isEmpty {
-                            EmptyHistoryState(onSync: syncService.requestSyncFromiPhone)
-                                .padding(.top, 24)
-                        } else {
-                            ForEach(conversationStore.conversations) { conversation in
-                                Button {
-                                    guard !isDetailSheetPresented else { return }
-                                    selectedConversation = conversation
-                                    isDetailSheetPresented = true
-                                } label: {
-                                    WatchConversationCard(conversation: conversation)
-                                }
-                                .buttonStyle(.plain)
-                            }
+                VStack(spacing: 0) {
+                    if conversationStore.conversations.isEmpty {
+                        emptyState
+                    } else {
+                        conversationList
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(action: { dismiss() }) {
+                        ZStack {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.3),
+                                                    Color.white.opacity(0.1)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.25),
+                                                    Color.white.opacity(0.1)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 0.5
+                                        )
+                                )
+                                .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
+                                .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
+                            
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.white)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
+                    .buttonStyle(GlassMenuButtonStyle())
                 }
+            }
+            .confirmationDialog(
+                "Delete All Conversations?",
+                isPresented: $showDeleteAllConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete All", role: .destructive) {
+                    conversationStore.deleteAllConversations()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete all \(conversationStore.conversations.count) conversations. This action cannot be undone.")
+            }
+    }
+    
+    private var conversationList: some View {
+        ScrollView {
+            VStack(spacing: 10) {
+                // Header
+                HStack {
+                    Text("History")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(WatchPalette.textPrimary)
+                    
+                    Spacer()
+                    
+                    if syncService.isSyncing {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .tint(WatchPalette.accent)
+                    }
+                    
+                    if !conversationStore.conversations.isEmpty {
+                        Button(action: {
+                            showDeleteAllConfirmation = true
+                        }) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.red.opacity(0.9))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
                 
-                actionBar
-            }
-            .padding(.top, 12)
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(action: {
-                    dismiss()
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
+                // Conversation rows
+                ForEach(conversationStore.conversations) { conversation in
+                    Button {
+                        // Set conversation as current and call callback to navigate from parent
+                        conversationStore.setCurrentConversation(conversation)
+                        onConversationSelected(conversation)
+                    } label: {
+                        ConversationRow(conversation: conversation)
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            conversationStore.deleteConversation(conversation)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .tint(.red)
+                    }
                 }
             }
-        }
-        .sheet(item: $selectedConversation, onDismiss: {
-            isDetailSheetPresented = false
-        }) { conversation in
-            WatchConversationDetailView(conversation: conversation)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
         }
     }
     
-    private var historyHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Conversation History")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                Spacer(minLength: 8)
-                if syncService.isSyncing {
-                    SyncPillView(text: "Syncing…", systemImage: "arrow.triangle.2.circlepath")
-                } else if let lastSync = syncService.lastSyncDate {
-                    SyncPillView(
-                        text: lastSync.relativeTimeString,
-                        systemImage: "clock.arrow.2.circlepath"
-                    )
-                }
-            }
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "clock")
+                .font(.system(size: 40, weight: .light))
+                .foregroundColor(WatchPalette.accent.opacity(0.6))
             
-            HStack(spacing: 8) {
-                Label("\(conversationStore.conversations.count) chats", systemImage: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.75))
-                
-                if let latestDate = mostRecentConversationDate() {
-                    Text("Updated \(latestDate.relativeTimeString)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.55))
-                }
-                
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-    
-    private var actionBar: some View {
-        HStack(spacing: 12) {
-            Button {
-                conversationStore.deleteAllConversations()
-            } label: {
-                Label("Clear", systemImage: "trash")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.red.opacity(0.35))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.red.opacity(0.55), lineWidth: 0.6)
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
+            Text("No conversations")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(WatchPalette.textPrimary)
             
-            Button {
-                syncService.requestSyncFromiPhone()
-            } label: {
-                Label(syncService.isSyncing ? "Syncing…" : "Sync", systemImage: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.85))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.white.opacity(syncService.isSyncing ? 0.35 : 0.85))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.white.opacity(0.5), lineWidth: 0.6)
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(syncService.isSyncing)
+            Text("Start a chat to see history")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(WatchPalette.textSecondary)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 60)
     }
     
-    private func mostRecentConversationDate() -> Date? {
-        conversationStore.conversations
-            .compactMap { conversation in
-                conversation.messages.last?.timestamp
-                    ?? conversation.messages.first?.timestamp
-                    ?? conversation.createdAt
-            }
-            .sorted(by: >)
-            .first
+    private func deleteConversation(at offsets: IndexSet) {
+        offsets.compactMap { conversationStore.conversations[safe: $0] }
+            .forEach { conversationStore.deleteConversation($0) }
     }
 }
 
-private struct SyncPillView: View {
-    var text: String
-    var systemImage: String
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .medium))
-            Text(text)
-                .font(.system(size: 10, weight: .semibold))
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .opacity(0.45)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.25), lineWidth: 0.6)
-                )
-        )
-        .foregroundColor(.white.opacity(0.8))
-    }
-}
+// MARK: - Conversation Row
 
-private struct EmptyHistoryState: View {
-    var onSync: () -> Void
-    
-    var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "clock.fill")
-                .font(.system(size: 32))
-                .foregroundColor(.white.opacity(0.65))
-                .padding(10)
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .opacity(0.35)
-                )
-            
-            Text("No conversations yet")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-            
-            Text("Start a new chat or sync your latest conversations from the iPhone app.")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white.opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 8)
-            
-            Button(action: onSync) {
-                Label("Sync from iPhone", systemImage: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.85))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.white.opacity(0.85))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.white.opacity(0.4), lineWidth: 0.6)
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 22)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .opacity(0.35)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 0.6)
-                )
-        )
-    }
-}
-
-struct WatchConversationCard: View {
+private struct ConversationRow: View {
     let conversation: Conversation
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(conversation.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    
-                    if let lastMessage = conversation.messages.last {
-                        Text(lastMessage.content)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
-                            .lineLimit(2)
-                    } else {
-                        Text("No messages yet")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.45))
-                    }
-                }
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(conversation.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(WatchPalette.textPrimary)
+                    .lineLimit(1)
                 
-                Spacer(minLength: 6)
-                
-                if let lastTimestamp = conversation.messages.last?.timestamp {
-                    Text(lastTimestamp.relativeTimeString)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.6))
-                }
+                Text(conversation.messages.last?.content ?? "No messages")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(WatchPalette.textSecondary)
+                    .lineLimit(1)
             }
             
-            HStack(spacing: 8) {
-                Label("\(conversation.messages.count) msgs", systemImage: "bubble.left.and.text.bubble.right.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.75))
-                
-                if let firstMessage = conversation.messages.first {
-                    Text("Started " + firstMessage.timestamp.relativeTimeString)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.45))
-                }
-                
-                Spacer()
-            }
+            Spacer()
+            
+            Text(conversation.messages.last?.timestamp.relativeTimeString ?? conversation.createdAt.relativeTimeString)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(WatchPalette.textTertiary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.18),
-                            Color.white.opacity(0.08)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.22), lineWidth: 0.6)
+                        .stroke(WatchPalette.glassBorder, lineWidth: 0.5)
                 )
-                .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
-                .shadow(color: .white.opacity(0.05), radius: 2, x: 0, y: 1)
         )
     }
 }
 
-struct WatchConversationDetailView: View {
-    let conversation: Conversation
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        ZStack {
-            // Glassmorphism background
-            Color.black
-                .ignoresSafeArea()
-            
-            // Subtle gradient overlay
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.9),
-                    Color.black.opacity(0.7),
-                    Color.black.opacity(0.9)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
-            VStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(conversation.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-                    
-                    if let lastMessage = conversation.messages.last {
-                        Text("Last reply \(lastMessage.timestamp.relativeTimeString)")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.55))
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(conversation.messages) { message in
-                            WatchMessageBubble(message: message)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 16)
-                }
-            }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(action: {
-                    dismiss()
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-        }
+// MARK: - Button Style
+
+private struct GlassMenuButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Helpers
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 
 #Preview {
     WatchHistoryView()
         .environmentObject(ConversationStore())
-}
-
-// MARK: - Helpers
-
-private extension Date {
-    var relativeTimeString: String {
-        RelativeDateTimeFormatter.watchFormatter.localizedString(for: self, relativeTo: Date())
-    }
-}
-
-private extension RelativeDateTimeFormatter {
-    static let watchFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter
-    }()
 }

@@ -8,232 +8,168 @@
 import SwiftUI
 
 struct SimpleChatView: View {
-    @State private var messageText = ""
-    @State private var messages: [String] = []
-    @State private var isLoading = false
+    @EnvironmentObject var conversationStore: ConversationStore
+    @EnvironmentObject var watchConnectivity: WatchConnectivityService
+    @EnvironmentObject var authService: AuthenticationService
+    
     @StateObject private var backendService = BackendService()
-    @StateObject private var watchConnectivity = WatchConnectivityService()
-    @State private var conversationHistory: [Message] = []
+    
+    @State private var messageText = ""
+    @State private var isProcessing = false
     
     var body: some View {
         NavigationView {
             ZStack {
-                // Glassmorphism background
-                Color.black
-                    .ignoresSafeArea()
+                // True black background with subtle glow
+                Color.black.ignoresSafeArea()
+                iOSPalette.backgroundGlow.ignoresSafeArea()
                 
-                // Subtle gradient overlay
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(0.9),
-                        Color.black.opacity(0.7),
-                        Color.black.opacity(0.9)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-                
-                VStack {
-                    // Messages
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            ForEach(messages, id: \.self) { message in
-                                Text(message)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 16)
+                VStack(spacing: 0) {
+                    // Messages area
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 16) {
+                                if let conversation = conversationStore.currentConversation,
+                                   !conversation.messages.isEmpty {
+                                    ForEach(conversation.messages.sorted(by: { $0.timestamp < $1.timestamp })) { message in
+                                        MessageBubble(message: message)
+                                            .id(message.id)
+                                    }
+                                } else {
+                                    emptyState
+                                }
+                                
+                                // Status indicators
+                                if isProcessing {
+                                    HStack(spacing: 8) {
+                                        ProgressView()
+                                            .tint(iOSPalette.accent)
+                                        Text("Thinking…")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(iOSPalette.textSecondary)
+                                    }
                                     .padding(.vertical, 12)
-                                    .background(
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: 18)
-                                                .fill(.ultraThinMaterial)
-                                                .opacity(0.5)
-                                            
-                                            RoundedRectangle(cornerRadius: 18)
-                                                .fill(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color.white.opacity(0.1),
-                                                            Color.white.opacity(0.03)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
-                                                )
-                                            
-                                            RoundedRectangle(cornerRadius: 18)
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color.white.opacity(0.25),
-                                                            Color.white.opacity(0.08)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ),
-                                                    lineWidth: 0.6
-                                                )
-                                        }
-                                    )
-                                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                        }
+                        .onChange(of: conversationStore.currentConversation?.messages.count) { oldCount, newCount in
+                            guard let newCount, let oldCount, newCount > oldCount,
+                                  let lastMessage = conversationStore.currentConversation?.messages.last else { return }
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
                         }
-                        .padding()
                     }
                     
-                    // Watch Connection Status
-                    if watchConnectivity.isWatchReachable {
-                        HStack {
-                            Image(systemName: "applewatch")
-                                .foregroundColor(.green)
-                            Text("Watch Connected")
-                                .foregroundColor(.green)
-                                .font(.caption)
-                        }
-                        .padding(.horizontal)
-                    }
-                    
-                    // Input
+                    // Input area
                     HStack(spacing: 12) {
-                        TextField("Type a message...", text: $messageText)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
+                        TextField("Type a message...", text: $messageText, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 16))
+                            .foregroundColor(iOSPalette.textPrimary)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                             .background(
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(.ultraThinMaterial)
-                                        .opacity(0.5)
-                                    
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.1),
-                                                    Color.white.opacity(0.03)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                    
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.25),
-                                                    Color.white.opacity(0.08)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 0.6
-                                        )
-                                }
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                            .stroke(iOSPalette.glassBorder, lineWidth: 0.5)
+                                    )
                             )
+                            .lineLimit(1...5)
                         
                         Button(action: sendMessage) {
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                                .frame(width: 44, height: 44)
-                                .background(
-                                    ZStack {
-                                        Circle()
-                                            .fill(.ultraThinMaterial)
-                                            .opacity(0.6)
-                                        
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.white.opacity(0.2),
-                                                        Color.white.opacity(0.1)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                        
-                                        Circle()
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.white.opacity(0.4),
-                                                        Color.white.opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                lineWidth: 0.8
-                                            )
-                                    }
-                                )
-                                .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1.5)
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(messageText.isEmpty ? iOSPalette.textTertiary : iOSPalette.accent)
                         }
-                        .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                        .disabled(messageText.isEmpty || isProcessing)
                     }
-                    .padding()
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(0.0),
+                                Color.black.opacity(0.8),
+                                Color.black
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                 }
             }
-            .navigationTitle("Simple Chat")
+            .navigationTitle("Chat")
+            .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.dark)
             .onAppear {
-                // Configure navigation bar appearance for dark theme
-                let appearance = UINavigationBarAppearance()
-                appearance.configureWithTransparentBackground()
-                appearance.backgroundColor = UIColor.black.withAlphaComponent(0.8)
-                appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-                appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-                
-                UINavigationBar.appearance().standardAppearance = appearance
-                UINavigationBar.appearance().scrollEdgeAppearance = appearance
-                UINavigationBar.appearance().compactAppearance = appearance
+                // Create conversation if needed
+                if conversationStore.currentConversation == nil {
+                    _ = conversationStore.createNewConversation()
+                }
             }
         }
     }
     
-    private func sendMessage() {
-        let message = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty else { return }
-        
-        messages.append("You: \(message)")
-        messageText = ""
-        isLoading = true
-        let userMessage = Message(content: message, isFromUser: true)
-        conversationHistory.append(userMessage)
-        
-        // Send message to Watch if connected
-        if watchConnectivity.isWatchReachable {
-            watchConnectivity.sendMessageToWatch(userMessage, conversationId: "current")
+    private var emptyState: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "message.fill")
+                .font(.system(size: 64, weight: .light))
+                .foregroundColor(iOSPalette.accent.opacity(0.6))
+            
+            Text("Start a conversation")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(iOSPalette.textPrimary)
+            
+            Text("Type a message below to begin chatting")
+                .font(.system(size: 16))
+                .foregroundColor(iOSPalette.textSecondary)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 100)
+    }
+    
+    private func sendMessage() {
+        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let conversation = conversationStore.currentConversation,
+              let deviceToken = authService.deviceToken else { return }
         
-        // Call real backend API
+        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        messageText = ""
+        
+        // Create user message
+        let userMessage = Message(content: text, isFromUser: true)
+        conversationStore.addMessage(userMessage, to: conversation)
+        
+        // Send to watch
+        watchConnectivity.sendMessageToWatch(userMessage, conversationId: conversation.id.uuidString)
+        
+        // Send to backend
+        isProcessing = true
         Task {
-            let conversation = Conversation(title: "Simple Chat", messages: conversationHistory)
-            let result = await backendService.sendTestMessage(conversation: conversation)
+            let result = await backendService.sendTestMessage(
+                message: text,
+                conversation: conversation
+            )
             
             await MainActor.run {
-                isLoading = false
+                isProcessing = false
                 
                 switch result {
                 case .success(let response):
-                    let aiResponse = "AI: \(response.response)"
-                    messages.append(aiResponse)
                     let aiMessage = Message(content: response.response, isFromUser: false)
-                    conversationHistory.append(aiMessage)
+                    conversationStore.addMessage(aiMessage, to: conversation)
                     
-                    // Send AI response to Watch if connected
-                    if watchConnectivity.isWatchReachable {
-                        watchConnectivity.sendMessageToWatch(aiMessage, conversationId: "current")
-                    }
+                    // Send to watch
+                    watchConnectivity.sendMessageToWatch(aiMessage, conversationId: conversation.id.uuidString)
+                    
                 case .failure(let error):
-                    let errorMessage = "AI: Error - \(error.localizedDescription)"
-                    messages.append(errorMessage)
-                    let aiMessage = Message(content: errorMessage, isFromUser: false)
-                    conversationHistory.append(aiMessage)
+                    print("Error sending message: \(error.localizedDescription)")
                 }
             }
         }
@@ -242,4 +178,6 @@ struct SimpleChatView: View {
 
 #Preview {
     SimpleChatView()
+        .environmentObject(ConversationStore())
+        .environmentObject(WatchConnectivityService())
 }
