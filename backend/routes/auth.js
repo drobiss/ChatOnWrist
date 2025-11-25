@@ -2,38 +2,25 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { getDatabase } = require('../database/init');
+const { validateAppleIDToken } = require('../middleware/validation');
+const { sendError, ErrorCodes } = require('../utils/errors');
+const { verifyAppleIDToken } = require('../utils/appleAuth');
 
 const router = express.Router();
 
 // POST /auth/apple - Authenticate with Apple Sign In
-router.post('/apple', async (req, res) => {
+router.post('/apple', validateAppleIDToken, async (req, res) => {
     try {
         const { appleIDToken } = req.body;
-        
-        if (!appleIDToken) {
-            return res.status(400).json({
-                message: 'Apple ID token is required',
-                code: 'MISSING_TOKEN'
-            });
-        }
 
-        // Handle production authentication
-        let mockAppleUser;
-        if (appleIDToken === 'production_user_token') {
-            mockAppleUser = {
-                sub: 'production_user_id',
-                email: 'user@chatonwrist.com',
-                email_verified: true
-            };
-        } else {
-            // In a real implementation, you would verify the Apple ID token with Apple's servers
-            // For now, we'll create a mock user for testing
-            mockAppleUser = {
-                sub: 'mock_apple_user_id',
-                email: 'test@example.com',
-                email_verified: true
-            };
+        // Verify Apple ID token
+        const appleUser = verifyAppleIDToken(appleIDToken);
+        
+        if (!appleUser) {
+            return sendError(res, 401, 'Invalid Apple ID token', ErrorCodes.INVALID_TOKEN);
         }
+        
+        console.log('✅ Verified Apple ID token for user:', appleUser.userId);
 
         const db = getDatabase();
         
@@ -41,7 +28,7 @@ router.post('/apple', async (req, res) => {
         const existingUser = await new Promise((resolve, reject) => {
             db.get(
                 'SELECT * FROM users WHERE apple_user_id = ?',
-                [mockAppleUser.sub],
+                [appleUser.userId],
                 (err, row) => {
                     if (err) reject(err);
                     else resolve(row);
@@ -52,13 +39,26 @@ router.post('/apple', async (req, res) => {
         let userId;
         if (existingUser) {
             userId = existingUser.id;
+            // Update email if it changed (Apple allows email changes)
+            if (appleUser.email && appleUser.email !== existingUser.email) {
+                await new Promise((resolve, reject) => {
+                    db.run(
+                        'UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                        [appleUser.email, userId],
+                        (err) => {
+                            if (err) reject(err);
+                            else resolve();
+                        }
+                    );
+                });
+            }
         } else {
             // Create new user
             userId = uuidv4();
             await new Promise((resolve, reject) => {
                 db.run(
                     'INSERT INTO users (id, apple_user_id, email) VALUES (?, ?, ?)',
-                    [userId, mockAppleUser.sub, mockAppleUser.email],
+                    [userId, appleUser.userId, appleUser.email || null],
                     (err) => {
                         if (err) reject(err);
                         else resolve();
@@ -89,11 +89,7 @@ router.post('/apple', async (req, res) => {
         console.error('Authentication error:', error);
         console.error('Error details:', error.message);
         console.error('JWT_SECRET exists:', !!process.env.JWT_SECRET);
-        res.status(500).json({
-            message: 'Authentication failed',
-            code: 'AUTH_ERROR',
-            details: error.message
-        });
+        sendError(res, 500, 'Authentication failed', ErrorCodes.AUTH_ERROR, error.message);
     }
 });
 
@@ -102,10 +98,7 @@ router.post('/verify', (req, res) => {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({
-                message: 'Authorization token required',
-                code: 'MISSING_TOKEN'
-            });
+            return sendError(res, 401, 'Authorization token required', ErrorCodes.MISSING_TOKEN);
         }
 
         const token = authHeader.substring(7);
@@ -118,10 +111,7 @@ router.post('/verify', (req, res) => {
         });
 
     } catch (error) {
-        res.status(401).json({
-            message: 'Invalid token',
-            code: 'INVALID_TOKEN'
-        });
+        sendError(res, 401, 'Invalid token', ErrorCodes.INVALID_TOKEN);
     }
 });
 

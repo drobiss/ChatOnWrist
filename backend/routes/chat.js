@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const { getDatabase } = require('../database/init');
+const { validateMessage, validateConversation } = require('../middleware/validation');
+const { sendError, ErrorCodes } = require('../utils/errors');
 
 const router = express.Router();
 
@@ -12,12 +14,39 @@ const baseSystemPrompt = `You are ChatOnWrist, a concise, context-aware AI assis
 - Answer in the language the user uses.
 - Provide a direct answer first. Add short supporting context only if it helps understanding.`;
 
-router.post('/test', async (req, res) => {
+router.post('/test', validateConversation, async (req, res) => {
+    const requestId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
     try {
         const { message, conversation } = req.body;
         
+        console.log(`[${requestId}] 📥 Received test chat request:`);
+        console.log(`[${requestId}]   Message:`, message);
+        console.log(`[${requestId}]   Conversation type:`, Array.isArray(conversation) ? 'array' : typeof conversation);
+        console.log(`[${requestId}]   Conversation length:`, Array.isArray(conversation) ? conversation.length : 'N/A');
+        
+        // Validate that either message or conversation is provided
         if ((!message || message.trim().length === 0) && (!Array.isArray(conversation) || conversation.length === 0)) {
-            return res.status(400).json({ error: 'Message or conversation history is required' });
+            return res.status(400).json({ 
+                message: 'Message or conversation history is required',
+                code: 'MISSING_INPUT'
+            });
+        }
+        
+        // If message is provided, validate it
+        if (message) {
+            const trimmed = message.trim();
+            if (trimmed.length === 0) {
+                return res.status(400).json({
+                    message: 'Message cannot be empty',
+                    code: 'EMPTY_MESSAGE'
+                });
+            }
+            if (trimmed.length > 5000) {
+                return res.status(400).json({
+                    message: 'Message exceeds maximum length of 5000 characters',
+                    code: 'MESSAGE_TOO_LONG'
+                });
+            }
         }
         
         const configuredTemperature = parseFloat(process.env.OPENAI_TEMPERATURE);
@@ -26,8 +55,13 @@ router.post('/test', async (req, res) => {
         const maxTokens = Number.isInteger(configuredMaxTokens) ? configuredMaxTokens : 200;
 
         const conversationMessages = Array.isArray(conversation) ? conversation : [];
-        const hasUserMessage = conversationMessages.some(msg => msg?.role === 'user');
-
+        
+        console.log(`[${requestId}] 📋 Processing conversation history:`);
+        conversationMessages.forEach((msg, idx) => {
+            console.log(`[${requestId}]   [${idx}] ${msg.role}: ${msg.content?.substring(0, 50)}...`);
+        });
+        
+        // Build messages array: system prompt + conversation history + new message (if provided)
         const messages = [
             { role: 'system', content: baseSystemPrompt },
             ...conversationMessages
@@ -35,9 +69,21 @@ router.post('/test', async (req, res) => {
                 .map(msg => ({
                     role: msg.role === 'assistant' ? 'assistant' : 'user',
                     content: msg.content
-                })),
-            ...(!hasUserMessage && message ? [{ role: 'user', content: message }] : [])
+                }))
         ];
+        
+        // Always add the message parameter if provided (it's the new user input)
+        const newUserMessage = message && message.trim().length > 0 ? message.trim() : null;
+        if (newUserMessage) {
+            messages.push({ role: 'user', content: newUserMessage });
+        }
+        
+        console.log(`[${requestId}] 📤 Sending to OpenAI with ${messages.length} messages total`);
+        console.log(`[${requestId}]   New message:`, newUserMessage);
+        console.log(`[${requestId}] 📤 Full messages array being sent to OpenAI:`);
+        messages.forEach((msg, idx) => {
+            console.log(`[${requestId}]   [${idx}] ${msg.role}: ${msg.content?.substring(0, 80)}...`);
+        });
 
         const openaiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: process.env.OPENAI_MODEL || 'gpt-4o',
@@ -52,6 +98,8 @@ router.post('/test', async (req, res) => {
         });
         
         const aiResponse = openaiResponse.data.choices[0].message.content;
+        console.log(`[${requestId}] ✅ OpenAI response received:`, aiResponse.substring(0, 100) + '...');
+        console.log(`[${requestId}] ✅ Full response length:`, aiResponse.length);
         
         res.json({
             response: aiResponse,
@@ -60,8 +108,11 @@ router.post('/test', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Test chat error:', error);
-        res.status(500).json({ error: 'Failed to process message' });
+        console.error(`[${requestId}] ❌ Test chat error:`, error);
+        if (error.response) {
+            console.error(`[${requestId}]   OpenAI API error:`, error.response.status, error.response.data);
+        }
+        sendError(res, 500, 'Failed to process message', ErrorCodes.CHAT_ERROR, error.message);
     }
 });
 
@@ -80,32 +131,27 @@ const verifyDeviceToken = (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         if (decoded.type !== 'device') {
-            return res.status(401).json({
-                message: 'Invalid token type',
-                code: 'INVALID_TOKEN_TYPE'
-            });
+            return sendError(res, 401, 'Invalid token type', ErrorCodes.INVALID_TOKEN_TYPE);
         }
 
         req.deviceId = decoded.deviceId;
         req.userId = decoded.userId;
         next();
     } catch (error) {
-        res.status(401).json({
-            message: 'Invalid token',
-            code: 'INVALID_TOKEN'
-        });
+        sendError(res, 401, 'Invalid token', ErrorCodes.INVALID_TOKEN);
     }
 };
 
 // POST /chat/message - Send a message and get AI response
-router.post('/message', async (req, res) => {
+router.post('/message', verifyDeviceToken, validateMessage, async (req, res) => {
     try {
         const { message, conversationId } = req.body;
         
-        if (!message || message.trim().length === 0) {
+        // Validate conversationId format if provided
+        if (conversationId && typeof conversationId !== 'string') {
             return res.status(400).json({
-                message: 'Message content is required',
-                code: 'MISSING_MESSAGE'
+                message: 'Invalid conversation ID format',
+                code: 'INVALID_CONVERSATION_ID'
             });
         }
 
@@ -224,20 +270,11 @@ router.post('/message', async (req, res) => {
         console.error('Chat message error:', error);
         
         if (error.response?.status === 401) {
-            res.status(500).json({
-                message: 'OpenAI API key is invalid',
-                code: 'OPENAI_AUTH_ERROR'
-            });
+            sendError(res, 500, 'OpenAI API key is invalid', ErrorCodes.OPENAI_AUTH_ERROR);
         } else if (error.response?.status === 429) {
-            res.status(500).json({
-                message: 'OpenAI API rate limit exceeded',
-                code: 'OPENAI_RATE_LIMIT'
-            });
+            sendError(res, 500, 'OpenAI API rate limit exceeded', ErrorCodes.OPENAI_RATE_LIMIT);
         } else {
-            res.status(500).json({
-                message: 'Failed to process message',
-                code: 'CHAT_ERROR'
-            });
+            sendError(res, 500, 'Failed to process message', ErrorCodes.CHAT_ERROR, error.message);
         }
     }
 });
@@ -296,10 +333,7 @@ router.get('/conversations', verifyDeviceToken, async (req, res) => {
 
     } catch (error) {
         console.error('Get conversations error:', error);
-        res.status(500).json({
-            message: 'Failed to get conversations',
-            code: 'GET_CONVERSATIONS_ERROR'
-        });
+        sendError(res, 500, 'Failed to get conversations', ErrorCodes.DATABASE_ERROR, error.message);
     }
 });
 
@@ -322,10 +356,7 @@ router.get('/conversations/:id', verifyDeviceToken, async (req, res) => {
         });
 
         if (!conversation) {
-            return res.status(404).json({
-                message: 'Conversation not found',
-                code: 'CONVERSATION_NOT_FOUND'
-            });
+            return sendError(res, 404, 'Conversation not found', ErrorCodes.CONVERSATION_NOT_FOUND);
         }
 
         // Get messages
@@ -354,10 +385,7 @@ router.get('/conversations/:id', verifyDeviceToken, async (req, res) => {
 
     } catch (error) {
         console.error('Get conversation error:', error);
-        res.status(500).json({
-            message: 'Failed to get conversation',
-            code: 'GET_CONVERSATION_ERROR'
-        });
+        sendError(res, 500, 'Failed to get conversation', ErrorCodes.DATABASE_ERROR, error.message);
     }
 });
 

@@ -3,15 +3,42 @@ const path = require('path');
 
 const DB_PATH = process.env.DATABASE_PATH || './database.sqlite';
 
+// Singleton database instance
+let dbInstance = null;
+let isInitialized = false;
+
 function initializeDatabase() {
     return new Promise((resolve, reject) => {
-        const db = new sqlite3.Database(DB_PATH, (err) => {
+        // If already initialized, resolve immediately
+        if (isInitialized && dbInstance) {
+            resolve();
+            return;
+        }
+
+        dbInstance = new sqlite3.Database(DB_PATH, (err) => {
             if (err) {
                 console.error('Error opening database:', err);
+                dbInstance = null;
                 reject(err);
                 return;
             }
             console.log('Connected to SQLite database');
+            
+            // Configure connection settings
+            dbInstance.configure('busyTimeout', 5000); // Wait up to 5 seconds for locks
+            
+            // Enable foreign keys
+            dbInstance.run('PRAGMA foreign_keys = ON', (err) => {
+                if (err) {
+                    console.warn('Warning: Could not enable foreign keys:', err);
+                }
+            });
+        });
+
+        // Handle database errors
+        dbInstance.on('error', (err) => {
+            console.error('Database error:', err);
+            // Don't close on error - let the application handle it
         });
 
         // Create tables
@@ -75,30 +102,52 @@ function initializeDatabase() {
             CREATE INDEX IF NOT EXISTS idx_pairing_codes_expires ON pairing_codes(expires_at);
         `;
 
-        db.exec(createTables, (err) => {
+        dbInstance.exec(createTables, (err) => {
             if (err) {
                 console.error('Error creating tables:', err);
+                dbInstance.close();
+                dbInstance = null;
                 reject(err);
                 return;
             }
             console.log('Database tables created successfully');
-            db.close((err) => {
-                if (err) {
-                    console.error('Error closing database:', err);
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
+            isInitialized = true;
+            resolve();
         });
     });
 }
 
 function getDatabase() {
-    return new sqlite3.Database(DB_PATH);
+    if (!dbInstance) {
+        throw new Error('Database not initialized. Call initializeDatabase() first.');
+    }
+    return dbInstance;
+}
+
+// Graceful shutdown function
+function closeDatabase() {
+    return new Promise((resolve, reject) => {
+        if (!dbInstance) {
+            resolve();
+            return;
+        }
+        
+        dbInstance.close((err) => {
+            if (err) {
+                console.error('Error closing database:', err);
+                reject(err);
+            } else {
+                console.log('Database connection closed');
+                dbInstance = null;
+                isInitialized = false;
+                resolve();
+            }
+        });
+    });
 }
 
 module.exports = {
     initializeDatabase,
-    getDatabase
+    getDatabase,
+    closeDatabase
 };

@@ -7,16 +7,49 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const deviceRoutes = require('./routes/device');
 const chatRoutes = require('./routes/chat');
-const { initializeDatabase } = require('./database/init');
+const { initializeDatabase, closeDatabase } = require('./database/init');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Validate required environment variables
+const requiredEnvVars = ['JWT_SECRET', 'OPENAI_API_KEY'];
+const missing = requiredEnvVars.filter(v => !process.env[v]);
+
+if (missing.length > 0) {
+    console.error('❌ Missing required environment variables:', missing.join(', '));
+    console.error('Please set these variables before starting the server.');
+    process.exit(1);
+}
+
 // Security middleware
 app.use(helmet());
+
+// CORS configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+    : [
+        'http://localhost:3000',
+        'https://chatonwrist-production-79ac.up.railway.app'
+    ];
+
 app.use(cors({
-    origin: ['http://localhost:3000', 'https://api.chatonwrist.com'],
-    credentials: true
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) {
+            return callback(null, true);
+        }
+        
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`CORS blocked origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Rate limiting
@@ -45,9 +78,16 @@ app.get('/admin/users', async (req, res) => {
     try {
         // Check for admin key in query parameter
         const adminKey = req.query.key;
-        const expectedKey = process.env.ADMIN_KEY || 'chatonwrist_admin_2025';
+        const expectedKey = process.env.ADMIN_KEY;
         
-        if (adminKey !== expectedKey) {
+        if (!expectedKey) {
+            return res.status(503).json({ 
+                error: 'Admin endpoint not configured',
+                message: 'ADMIN_KEY environment variable is not set'
+            });
+        }
+        
+        if (!adminKey || adminKey !== expectedKey) {
             return res.status(401).json({ 
                 error: 'Unauthorized - admin key required',
                 hint: 'Add ?key=your_admin_key to the URL'
@@ -167,12 +207,17 @@ async function startServer() {
 startServer();
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
-    process.exit(0);
-});
+async function gracefulShutdown(signal) {
+    console.log(`${signal} received, shutting down gracefully...`);
+    try {
+        await closeDatabase();
+        console.log('Database closed successfully');
+        process.exit(0);
+    } catch (error) {
+        console.error('Error during shutdown:', error);
+        process.exit(1);
+    }
+}
 
-process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
-    process.exit(0);
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
