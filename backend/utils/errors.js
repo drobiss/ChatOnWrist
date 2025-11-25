@@ -1,0 +1,68 @@
+/**
+ * Standardized error codes for the API
+ */
+const ErrorCodes = {
+    VALIDATION_ERROR: 'VALIDATION_ERROR',
+    AUTHENTICATION_ERROR: 'AUTHENTICATION_ERROR',
+    AUTHORIZATION_ERROR: 'AUTHORIZATION_ERROR',
+    NOT_FOUND: 'NOT_FOUND',
+    SERVER_ERROR: 'SERVER_ERROR',
+    DATABASE_ERROR: 'DATABASE_ERROR',
+    OPENAI_ERROR: 'OPENAI_ERROR',
+    OPENAI_AUTH_ERROR: 'OPENAI_AUTH_ERROR',
+    OPENAI_RATE_LIMIT: 'OPENAI_RATE_LIMIT',
+    MISSING_INPUT: 'MISSING_INPUT',
+    EMPTY_MESSAGE: 'EMPTY_MESSAGE',
+    MESSAGE_TOO_LONG: 'MESSAGE_TOO_LONG',
+    INVALID_PAIRING_CODE: 'INVALID_PAIRING_CODE',
+    INVALID_PAIRING_CODE_FORMAT: 'INVALID_PAIRING_CODE_FORMAT',
+    PAIRING_CODE_EXPIRED: 'PAIRING_CODE_EXPIRED',
+    PAIRING_CODE_USED: 'PAIRING_CODE_USED',
+    DEVICE_ALREADY_PAIRED: 'DEVICE_ALREADY_PAIRED',
+    INVALID_TOKEN: 'INVALID_TOKEN',
+    INVALID_TOKEN_TYPE: 'INVALID_TOKEN_TYPE',
+    INVALID_TOKEN_FORMAT: 'INVALID_TOKEN_FORMAT',
+    MISSING_TOKEN: 'MISSING_TOKEN',
+    CHAT_ERROR: 'CHAT_ERROR',
+    APPLE_AUTH_ERROR: 'APPLE_AUTH_ERROR',
+    INVALID_APPLE_ID_TOKEN: 'INVALID_APPLE_ID_TOKEN',
+    INVALID_CLIENT_ID: 'INVALID_CLIENT_ID',
+    INVALID_ISSUER: 'INVALID_ISSUER',
+    TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+    INVALID_NONCE: 'INVALID_NONCE',
+    INVALID_CONVERSATION_FORMAT: 'INVALID_CONVERSATION_FORMAT',
+    INVALID_MESSAGE_FORMAT: 'INVALID_MESSAGE_FORMAT',
+    INVALID_MESSAGE_ROLE: 'INVALID_MESSAGE_ROLE',
+    INVALID_MESSAGE_CONTENT: 'INVALID_MESSAGE_CONTENT',
+    EMPTY_MESSAGE_CONTENT: 'EMPTY_MESSAGE_CONTENT',
+    MISSING_APPLE_ID_TOKEN: 'MISSING_APPLE_ID_TOKEN',
+    MISSING_PAIRING_CODE: 'MISSING_PAIRING_CODE',
+    CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
+    AUTH_ERROR: 'AUTH_ERROR',
+    PAIRING_ERROR: 'PAIRING_ERROR',
+    PAIRING_CODE_ERROR: 'PAIRING_CODE_ERROR',
+    GET_DEVICES_ERROR: 'GET_DEVICES_ERROR'
+};
+
+/**
+ * Send standardized error response
+ * @param {Object} res - Express response object
+ * @param {number} statusCode - HTTP status code
+ * @param {string} message - Error message
+ * @param {string} code - Error code (from ErrorCodes)
+ * @param {string} details - Optional details (only shown in development)
+ */
+function sendError(res, statusCode, message, code = ErrorCodes.SERVER_ERROR, details = null) {
+    console.error(`Error ${statusCode} (${code}): ${message}`, details ? `Details: ${details}` : '');
+    res.status(statusCode).json({
+        message,
+        code,
+        details: process.env.NODE_ENV === 'development' && details ? details : undefined
+    });
+}
+
+module.exports = {
+    ErrorCodes,
+    sendError
+};
+
