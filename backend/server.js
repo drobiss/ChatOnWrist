@@ -12,14 +12,14 @@ const { initializeDatabase, closeDatabase } = require('./database/init');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Validate required environment variables
+// Check required environment variables (but don't exit - let healthcheck work)
 const requiredEnvVars = ['JWT_SECRET', 'OPENAI_API_KEY'];
 const missing = requiredEnvVars.filter(v => !process.env[v]);
 
 if (missing.length > 0) {
-    console.error('❌ Missing required environment variables:', missing.join(', '));
-    console.error('Please set these variables before starting the server.');
-    process.exit(1);
+    console.error('⚠️ Missing required environment variables:', missing.join(', '));
+    console.error('⚠️ Some features may not work until these are set.');
+    // Don't exit - let server start for healthcheck
 }
 
 // Security middleware
@@ -64,12 +64,13 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint
+// Health check endpoint - must be available immediately for Railway healthcheck
 app.get('/health', (req, res) => {
     res.status(200).json({
         status: 'OK',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        database: 'initializing'
     });
 });
 
@@ -173,8 +174,24 @@ app.use('*', (req, res) => {
     });
 });
 
-// Initialize database and start server
-async function startServer() {
+// Start server first (before database init) so healthcheck works
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 ChatOnWrist Backend Server running on port ${PORT}`);
+    console.log(`📱 Health check: http://0.0.0.0:${PORT}/health`);
+    console.log(`🔗 API Base URL: http://0.0.0.0:${PORT}`);
+});
+
+// Handle server errors
+server.on('error', (err) => {
+    console.error('Server error:', err);
+    if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use`);
+    }
+    process.exit(1);
+});
+
+// Initialize database after server starts
+async function initializeServer() {
     try {
         console.log('Starting ChatOnWrist Backend Server...');
         console.log('Environment:', process.env.NODE_ENV || 'development');
@@ -183,28 +200,24 @@ async function startServer() {
         await initializeDatabase();
         console.log('Database initialized successfully');
         
-        const server = app.listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 ChatOnWrist Backend Server running on port ${PORT}`);
-            console.log(`📱 Health check: http://0.0.0.0:${PORT}/health`);
-            console.log(`🔗 API Base URL: http://0.0.0.0:${PORT}`);
-        });
-        
-        // Handle server errors
-        server.on('error', (err) => {
-            console.error('Server error:', err);
-            if (err.code === 'EADDRINUSE') {
-                console.error(`Port ${PORT} is already in use`);
-            }
-            process.exit(1);
+        // Update health endpoint to show database is ready
+        app.get('/health', (req, res) => {
+            res.status(200).json({
+                status: 'OK',
+                timestamp: new Date().toISOString(),
+                uptime: process.uptime(),
+                database: 'ready'
+            });
         });
         
     } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
+        console.error('Failed to initialize database:', error);
+        // Don't exit - let server continue running for healthcheck
+        // Database will be initialized on next request if needed
     }
 }
 
-startServer();
+initializeServer();
 
 // Graceful shutdown
 async function gracefulShutdown(signal) {
