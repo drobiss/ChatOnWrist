@@ -63,22 +63,72 @@ class WatchConnectivityService: NSObject, ObservableObject {
     }
     
     func sendUserTokenToWatch(_ token: String) {
-        guard isWatchReachable else { return }
-        
         let data: [String: Any] = [
             "type": "userToken",
             "token": token
         ]
         
-        session.sendMessage(data, replyHandler: nil) { error in
-            print("Error sending user token to watch: \(error.localizedDescription)")
+        // Try to send via message (requires Watch to be reachable)
+        if isWatchReachable {
+            print("📱 Sending user token to Watch via message (Watch is reachable)")
+            session.sendMessage(data, replyHandler: { response in
+                print("📱 Token sent to Watch successfully")
+            }) { error in
+                print("❌ Error sending user token to watch via message: \(error.localizedDescription)")
+                // Fallback: try application context
+                self.sendTokenViaApplicationContext(token)
+            }
+        } else {
+            print("📱 Watch not immediately reachable, using application context")
+            // Use application context as fallback (works even if Watch app isn't running)
+            sendTokenViaApplicationContext(token)
+        }
+    }
+    
+    private func sendTokenViaApplicationContext(_ token: String) {
+        let data: [String: Any] = [
+            "type": "userToken",
+            "token": token
+        ]
+        
+        do {
+            try session.updateApplicationContext(data)
+            print("📱 Token sent to Watch via application context")
+        } catch {
+            print("❌ Error sending token via application context: \(error.localizedDescription)")
+        }
+    }
+    
+    func sendLogoutToWatch() {
+        let data: [String: Any] = [
+            "type": "logout"
+        ]
+        
+        // Always use application context for logout so it persists even if Watch isn't running
+        do {
+            try session.updateApplicationContext(data)
+            print("📱 Logout sent to Watch via application context")
+        } catch {
+            print("❌ Error sending logout via application context: \(error.localizedDescription)")
+        }
+        
+        // Also try sending via message if Watch is reachable
+        if isWatchReachable {
+            session.sendMessage(data, replyHandler: nil) { error in
+                print("❌ Error sending logout message to watch: \(error.localizedDescription)")
+            }
         }
     }
     
     // MARK: - Receive Data from Watch
     
     func handleWatchMessage(_ message: [String: Any]) {
-        guard let type = message["type"] as? String else { return }
+        guard let type = message["type"] as? String else {
+            print("📱 Received message from Watch without type")
+            return
+        }
+        
+        print("📱 Handling Watch message type: \(type)")
         
         switch type {
         case "message":
@@ -90,6 +140,7 @@ class WatchConnectivityService: NSObject, ObservableObject {
         case "userTokenRequest":
             handleUserTokenRequest()
         default:
+            print("📱 Unknown message type from Watch: \(type)")
             break
         }
     }
@@ -147,6 +198,7 @@ class WatchConnectivityService: NSObject, ObservableObject {
     
     private func handleUserTokenRequest() {
         // Send user token to watch
+        print("📱 Watch requested user token - posting notification")
         NotificationCenter.default.post(name: .watchUserTokenRequested, object: nil)
     }
     
@@ -219,12 +271,14 @@ extension WatchConnectivityService: WCSessionDelegate {
     }
     
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        print("📱 Received message from Watch")
         DispatchQueue.main.async {
             self.handleWatchMessage(message)
         }
     }
     
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        print("📱 Received message with reply handler from Watch")
         DispatchQueue.main.async {
             self.handleWatchMessage(message)
             
@@ -236,6 +290,7 @@ extension WatchConnectivityService: WCSessionDelegate {
                     replyHandler(["status": "success"])
                 case "userTokenRequest":
                     // Reply with user token
+                    print("📱 Replying to Watch token request")
                     replyHandler(["status": "success"])
                 default:
                     replyHandler(["status": "received"])
@@ -254,4 +309,6 @@ extension Notification.Name {
     static let watchUserTokenRequested = Notification.Name("watchUserTokenRequested")
     static let conversationCreated = Notification.Name("conversationCreated")
     static let messageAdded = Notification.Name("messageAdded")
+    static let userAuthenticated = Notification.Name("userAuthenticated")
+    static let userLoggedOut = Notification.Name("userLoggedOut")
 }

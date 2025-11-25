@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @StateObject private var authService = AuthenticationService()
+    @EnvironmentObject var authService: AuthenticationService
     @StateObject private var backendService = BackendService()
     
     @State private var showingBackendStatus = false

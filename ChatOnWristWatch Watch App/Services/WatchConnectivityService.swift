@@ -22,6 +22,18 @@ class WatchConnectivityService: NSObject, ObservableObject {
             print("Watch: WCSession is supported")
             session.delegate = self
             session.activate()
+            
+            // Check application context immediately for any pending messages (like logout)
+            // Note: receivedApplicationContext is available after activation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                let applicationContext = self.session.receivedApplicationContext
+                if !applicationContext.isEmpty {
+                    print("⌚️ Found application context on startup: \(applicationContext)")
+                    self.handleiPhoneMessage(applicationContext)
+                } else {
+                    print("⌚️ No application context found on startup")
+                }
+            }
         } else {
             print("Watch: WCSession is not supported on this device")
         }
@@ -83,7 +95,12 @@ class WatchConnectivityService: NSObject, ObservableObject {
     // MARK: - Receive Data from iPhone
     
     func handleiPhoneMessage(_ message: [String: Any]) {
-        guard let type = message["type"] as? String else { return }
+        guard let type = message["type"] as? String else {
+            print("⌚️ Received message from iPhone without type")
+            return
+        }
+        
+        print("⌚️ Handling iPhone message type: \(type)")
         
         switch type {
         case "conversation":
@@ -92,7 +109,10 @@ class WatchConnectivityService: NSObject, ObservableObject {
             handleIncomingMessage(message)
         case "userToken":
             handleIncomingUserToken(message)
+        case "logout":
+            handleIncomingLogout(message)
         default:
+            print("⌚️ Unknown message type from iPhone: \(type)")
             break
         }
     }
@@ -126,12 +146,24 @@ class WatchConnectivityService: NSObject, ObservableObject {
     }
     
     private func handleIncomingUserToken(_ message: [String: Any]) {
-        guard let token = message["token"] as? String else { return }
+        guard let token = message["token"] as? String else {
+            print("⌚️ Received userToken message but token is missing")
+            return
+        }
         
+        print("⌚️ Received user token from iPhone: \(token.prefix(20))...")
         NotificationCenter.default.post(
             name: .iphoneUserTokenReceived,
             object: nil,
             userInfo: ["token": token]
+        )
+    }
+    
+    private func handleIncomingLogout(_ message: [String: Any]) {
+        print("⌚️ Received logout signal from iPhone")
+        NotificationCenter.default.post(
+            name: .iphoneLogoutReceived,
+            object: nil
         )
     }
     
@@ -205,12 +237,14 @@ extension WatchConnectivityService: WCSessionDelegate {
     }
     
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        print("⌚️ Received message from iPhone: \(message["type"] as? String ?? "unknown")")
         DispatchQueue.main.async {
             self.handleiPhoneMessage(message)
         }
     }
     
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        print("⌚️ Received message with reply handler from iPhone: \(message["type"] as? String ?? "unknown")")
         DispatchQueue.main.async {
             self.handleiPhoneMessage(message)
             replyHandler(["status": "received"])
@@ -218,12 +252,14 @@ extension WatchConnectivityService: WCSessionDelegate {
     }
     
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        print("⌚️ Received application context from iPhone: \(applicationContext)")
         DispatchQueue.main.async {
             self.handleiPhoneMessage(applicationContext)
         }
     }
     
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        print("⌚️ Received user info from iPhone")
         DispatchQueue.main.async {
             self.handleiPhoneMessage(userInfo)
         }
@@ -236,6 +272,7 @@ extension Notification.Name {
     static let iphoneConversationReceived = Notification.Name("iphoneConversationReceived")
     static let iphoneMessageReceived = Notification.Name("iphoneMessageReceived")
     static let iphoneUserTokenReceived = Notification.Name("iphoneUserTokenReceived")
+    static let iphoneLogoutReceived = Notification.Name("iphoneLogoutReceived")
     static let conversationCreated = Notification.Name("conversationCreated")
 }
 

@@ -16,12 +16,17 @@ struct SimpleChatView: View {
     
     @State private var messageText = ""
     @State private var isProcessing = false
+    @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         NavigationView {
             ZStack {
                 // True black background with subtle glow
                 Color.black.ignoresSafeArea()
+                    .onTapGesture {
+                        // Dismiss keyboard when tapping background
+                        isTextFieldFocused = false
+                    }
                 iOSPalette.backgroundGlow.ignoresSafeArea()
                 
                 VStack(spacing: 0) {
@@ -80,6 +85,12 @@ struct SimpleChatView: View {
                                     )
                             )
                             .lineLimit(1...5)
+                            .focused($isTextFieldFocused)
+                            .onSubmit {
+                                if !messageText.isEmpty && !isProcessing {
+                                    sendMessage()
+                                }
+                            }
                         
                         Button(action: sendMessage) {
                             Image(systemName: "arrow.up.circle.fill")
@@ -136,25 +147,59 @@ struct SimpleChatView: View {
     
     private func sendMessage() {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let conversation = conversationStore.currentConversation,
-              let deviceToken = authService.deviceToken else { return }
+              let conversation = conversationStore.currentConversation else {
+            print("❌ Cannot send message: missing conversation or empty text")
+            return
+        }
+        
+        // Dismiss keyboard
+        isTextFieldFocused = false
         
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         messageText = ""
         
+        // Get the conversation ID to ensure we're working with the right one
+        let conversationId = conversation.id
+        
+        // Capture conversation state BEFORE adding the new message
+        // Get fresh copy from store to ensure we have the latest state
+        guard let currentConv = conversationStore.getConversation(by: conversationId) else {
+            print("❌ Conversation not found in store")
+            return
+        }
+        
+        // Create a copy of the messages array to avoid reference issues
+        let conversationHistory = Array(currentConv.messages)
+        
+        print("📤 Preparing to send message: '\(text)'")
+        print("📤 Current conversation has \(conversationHistory.count) messages in history")
+        for (index, msg) in conversationHistory.enumerated() {
+            print("  [\(index)] \(msg.isFromUser ? "User" : "AI"): \(msg.content.prefix(50))...")
+        }
+        
         // Create user message
         let userMessage = Message(content: text, isFromUser: true)
+        
+        // Add user message to conversation for immediate UI update
         conversationStore.addMessage(userMessage, to: conversation)
         
-        // Send to watch
-        watchConnectivity.sendMessageToWatch(userMessage, conversationId: conversation.id.uuidString)
+        // Send to watch if available
+        if watchConnectivity.isWatchReachable {
+            watchConnectivity.sendMessageToWatch(userMessage, conversationId: conversation.id.uuidString)
+        }
         
-        // Send to backend
+        // Send to backend - match Watch app approach exactly
         isProcessing = true
         Task {
+            // Get updated conversation from store (same as Watch app)
+            // This will include the message we just added, but BackendService will handle it correctly
+            let updatedConversation = await MainActor.run {
+                return conversationStore.currentConversation ?? conversation
+            }
+            
             let result = await backendService.sendTestMessage(
                 message: text,
-                conversation: conversation
+                conversation: updatedConversation
             )
             
             await MainActor.run {
@@ -162,14 +207,20 @@ struct SimpleChatView: View {
                 
                 switch result {
                 case .success(let response):
+                    print("✅ Received response: \(response.response.prefix(50))...")
                     let aiMessage = Message(content: response.response, isFromUser: false)
                     conversationStore.addMessage(aiMessage, to: conversation)
                     
-                    // Send to watch
-                    watchConnectivity.sendMessageToWatch(aiMessage, conversationId: conversation.id.uuidString)
+                    // Send to watch if available
+                    if watchConnectivity.isWatchReachable {
+                        watchConnectivity.sendMessageToWatch(aiMessage, conversationId: conversation.id.uuidString)
+                    }
                     
                 case .failure(let error):
-                    print("Error sending message: \(error.localizedDescription)")
+                    print("❌ Error sending message: \(error.localizedDescription)")
+                    // Show error message to user
+                    let errorMessage = Message(content: "Error: \(error.localizedDescription)", isFromUser: false)
+                    conversationStore.addMessage(errorMessage, to: conversation)
                 }
             }
         }

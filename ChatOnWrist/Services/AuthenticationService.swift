@@ -7,9 +7,10 @@
 
 import Foundation
 import Combine
+import AuthenticationServices
 
 @MainActor
-class AuthenticationService: ObservableObject {
+class AuthenticationService: NSObject, ObservableObject {
     @Published var isAuthenticated = false
     @Published var userAccessToken: String?
     @Published var deviceToken: String?
@@ -19,19 +20,24 @@ class AuthenticationService: ObservableObject {
     private let keychain = KeychainService()
     private let backendService = BackendService()
     
-    init() {
+    override init() {
+        super.init()
         loadStoredTokens()
     }
     
     func signInWithApple() {
-        // For production, we'll use a simplified authentication flow
-        // that works on both simulator and real devices
-        Task {
-            await authenticateWithBackend(appleIDToken: "production_user_token")
-        }
+        let provider = ASAuthorizationAppleIDProvider()
+        let request = provider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+        authorizationController.delegate = self
+        authorizationController.presentationContextProvider = self
+        authorizationController.performRequests()
     }
     
     func signOut() {
+        print("📱 Signing out...")
         userAccessToken = nil
         deviceToken = nil
         isAuthenticated = false
@@ -39,6 +45,11 @@ class AuthenticationService: ObservableObject {
         
         keychain.delete(key: "userAccessToken")
         keychain.delete(key: "deviceToken")
+        
+        print("📱 Sign out complete, isAuthenticated = \(isAuthenticated)")
+        
+        // Notify Watch to logout as well
+        NotificationCenter.default.post(name: .userLoggedOut, object: nil)
     }
     
     func pairDevice(pairingCode: String) async -> Bool {
@@ -93,11 +104,70 @@ class AuthenticationService: ObservableObject {
                 self.userAccessToken = response.userToken
                 self.isAuthenticated = true
                 self.keychain.save(key: "userAccessToken", value: response.userToken)
+                
+                // Notify that authentication completed (Watch can request token if needed)
+                NotificationCenter.default.post(name: .userAuthenticated, object: nil)
             case .failure(let error):
                 print("Authentication failed: \(error.localizedDescription)")
                 self.errorMessage = "Authentication failed: \(error.localizedDescription)"
             }
         }
+    }
+}
+
+// MARK: - ASAuthorizationControllerDelegate
+
+extension AuthenticationService: ASAuthorizationControllerDelegate {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let identityToken = appleIDCredential.identityToken,
+              let tokenString = String(data: identityToken, encoding: .utf8) else {
+            errorMessage = "Failed to get Apple ID token"
+            isLoading = false
+            return
+        }
+        
+        print("✅ Apple Sign in successful, user ID: \(appleIDCredential.user)")
+        Task {
+            await authenticateWithBackend(appleIDToken: tokenString)
+        }
+    }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("❌ Apple Sign in failed: \(error.localizedDescription)")
+        isLoading = false
+        
+        if let authError = error as? ASAuthorizationError {
+            switch authError.code {
+            case .canceled:
+                errorMessage = "Sign in was canceled"
+            case .failed:
+                errorMessage = "Sign in failed. Please try again."
+            case .invalidResponse:
+                errorMessage = "Invalid response from Apple"
+            case .notHandled:
+                errorMessage = "Sign in request could not be handled"
+            case .unknown:
+                errorMessage = "An unknown error occurred"
+            @unknown default:
+                errorMessage = "Sign in failed: \(error.localizedDescription)"
+            }
+        } else {
+            errorMessage = "Sign in failed: \(error.localizedDescription)"
+        }
+    }
+}
+
+// MARK: - ASAuthorizationControllerPresentationContextProviding
+
+extension AuthenticationService: ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        // Get the key window
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            fatalError("No window found for Apple Sign in presentation")
+        }
+        return window
     }
 }
 
