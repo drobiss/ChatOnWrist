@@ -13,7 +13,15 @@ function getDb() {
     if (dbUrl.includes('postgresql://') || dbUrl.includes('postgres://')) {
         return { type: 'prisma', client: getPrismaClient() };
     }
-    return { type: 'sqlite', client: getDatabase() };
+    try {
+        return { type: 'sqlite', client: getDatabase() };
+    } catch (error) {
+        // If SQLite fails, try Prisma as fallback
+        if (dbUrl) {
+            return { type: 'prisma', client: getPrismaClient() };
+        }
+        throw error;
+    }
 }
 
 const router = express.Router();
