@@ -1,7 +1,25 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+// Only load SQLite if we're not using PostgreSQL
+let sqlite3 = null;
+let DB_PATH = null;
 
-const DB_PATH = process.env.DATABASE_PATH || './database.sqlite';
+function loadSQLite() {
+    if (!sqlite3) {
+        const dbUrl = process.env.DATABASE_URL || '';
+        // Only use SQLite if DATABASE_URL is not PostgreSQL
+        if (!dbUrl.includes('postgresql://') && !dbUrl.includes('postgres://')) {
+            try {
+                sqlite3 = require('sqlite3').verbose();
+                DB_PATH = process.env.DATABASE_PATH || './database.sqlite';
+            } catch (error) {
+                console.warn('⚠️ sqlite3 module not available. Using PostgreSQL only.');
+                return false;
+            }
+        } else {
+            return false; // Using PostgreSQL
+        }
+    }
+    return sqlite3 !== null;
+}
 
 // Singleton database instance
 let dbInstance = null;
@@ -9,6 +27,14 @@ let isInitialized = false;
 
 function initializeDatabase() {
     return new Promise((resolve, reject) => {
+        // Check if we should use SQLite
+        if (!loadSQLite()) {
+            // Using PostgreSQL, skip SQLite initialization
+            console.log('📊 Skipping SQLite initialization (using PostgreSQL)');
+            resolve();
+            return;
+        }
+        
         // If already initialized, resolve immediately
         if (isInitialized && dbInstance) {
             resolve();
@@ -118,6 +144,11 @@ function initializeDatabase() {
 }
 
 function getDatabase() {
+    // Check if we should use SQLite
+    if (!loadSQLite()) {
+        throw new Error('SQLite not available. This endpoint requires SQLite or needs to be migrated to Prisma.');
+    }
+    
     if (!dbInstance) {
         throw new Error('Database not initialized. Call initializeDatabase() first.');
     }
