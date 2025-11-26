@@ -16,6 +16,20 @@ async function initializePrisma() {
     // Test connection
     await client.$connect();
     console.log('✅ Prisma Client connected to database');
+    
+    // Push schema to database (creates tables if they don't exist)
+    try {
+        const { execSync } = require('child_process');
+        console.log('📊 Pushing Prisma schema to database...');
+        execSync('npx prisma db push --skip-generate', { 
+            stdio: 'inherit',
+            cwd: require('path').join(__dirname, '..')
+        });
+        console.log('✅ Database schema synced');
+    } catch (error) {
+        console.warn('⚠️ Could not push schema (this is OK if tables already exist):', error.message);
+    }
+    
     return client;
 }
 
