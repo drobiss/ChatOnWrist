@@ -150,29 +150,20 @@ function initializeDatabase() {
 }
 
 function getDatabase() {
-    // Check if PostgreSQL is configured - return Prisma adapter
+    // Check PostgreSQL FIRST - don't even try to load SQLite if PostgreSQL is configured
     const dbUrl = process.env.DATABASE_URL || '';
     if (dbUrl.includes('postgresql://') || dbUrl.includes('postgres://')) {
-        // Return Prisma client wrapped to work like SQLite db
-        const { getPrismaClient } = require('./prisma');
-        const prisma = getPrismaClient();
-        
-        // Return an adapter that makes Prisma work like SQLite db interface
+        // PostgreSQL is configured - routes need to use Prisma, not SQLite
+        // Return a dummy object to prevent crashes, but routes will fail when called
+        console.warn('⚠️ getDatabase() called but PostgreSQL is configured. Routes need to use Prisma.');
         return {
-            get: async (query, params) => {
-                // Simple query adapter - routes will need updating but this prevents crashes
-                throw new Error('Routes need to be updated to use Prisma directly. PostgreSQL is configured.');
-            },
-            all: async (query, params) => {
-                throw new Error('Routes need to be updated to use Prisma directly. PostgreSQL is configured.');
-            },
-            run: async (query, params) => {
-                throw new Error('Routes need to be updated to use Prisma directly. PostgreSQL is configured.');
-            }
+            get: () => { throw new Error('Use Prisma - PostgreSQL is configured'); },
+            all: () => { throw new Error('Use Prisma - PostgreSQL is configured'); },
+            run: () => { throw new Error('Use Prisma - PostgreSQL is configured'); }
         };
     }
     
-    // Use SQLite
+    // Use SQLite only if PostgreSQL is NOT configured
     if (!loadSQLite()) {
         throw new Error('SQLite not available. Please configure DATABASE_URL for PostgreSQL or ensure sqlite3 is installed.');
     }
