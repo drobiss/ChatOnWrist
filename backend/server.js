@@ -388,12 +388,16 @@ async function initializeServer() {
         console.log('Environment:', process.env.NODE_ENV || 'development');
         console.log('Port:', PORT);
         
-        // Try Prisma first (PostgreSQL), fallback to SQLite
+        // Check DATABASE_URL
         const dbUrl = process.env.DATABASE_URL || '';
+        console.log('📊 DATABASE_URL:', dbUrl ? `${dbUrl.substring(0, 20)}...` : 'NOT SET');
+        
+        // Try Prisma first (PostgreSQL), fallback to SQLite
         if (dbUrl.includes('postgresql://') || dbUrl.includes('postgres://')) {
             console.log('📊 Using PostgreSQL with Prisma...');
             await initializePrisma();
             console.log('✅ Prisma initialized successfully');
+            console.log('⚠️  NOTE: Routes still use SQLite queries. They need to be migrated to Prisma.');
         } else {
             console.log('📊 Using SQLite...');
             await initializeDatabase();

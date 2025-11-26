@@ -151,8 +151,13 @@ function initializeDatabase() {
 
 function getDatabase() {
     // Check if we should use SQLite
+    const dbUrl = process.env.DATABASE_URL || '';
+    if (dbUrl.includes('postgresql://') || dbUrl.includes('postgres://')) {
+        throw new Error('PostgreSQL is configured. Routes need to be migrated to use Prisma instead of getDatabase().');
+    }
+    
     if (!loadSQLite()) {
-        throw new Error('SQLite not available. This endpoint requires SQLite or needs to be migrated to Prisma.');
+        throw new Error('SQLite not available. Please configure DATABASE_URL for PostgreSQL or ensure sqlite3 is installed.');
     }
     
     if (!dbInstance) {
