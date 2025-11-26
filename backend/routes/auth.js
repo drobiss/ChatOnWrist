@@ -2,9 +2,19 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { getDatabase } = require('../database/init');
+const { getPrismaClient } = require('../database/prisma');
 const { validateAppleIDToken } = require('../middleware/validation');
 const { sendError, ErrorCodes } = require('../utils/errors');
 const { verifyAppleIDToken } = require('../utils/appleAuth');
+
+// Helper to get database (Prisma or SQLite)
+function getDb() {
+    const dbUrl = process.env.DATABASE_URL || '';
+    if (dbUrl.includes('postgresql://') || dbUrl.includes('postgres://')) {
+        return { type: 'prisma', client: getPrismaClient() };
+    }
+    return { type: 'sqlite', client: getDatabase() };
+}
 
 const router = express.Router();
 
@@ -22,29 +32,76 @@ router.post('/apple', validateAppleIDToken, async (req, res) => {
         
         console.log('✅ Verified Apple ID token for user:', appleUser.userId);
 
-        const db = getDatabase();
-        
-        // Check if user exists
-        const existingUser = await new Promise((resolve, reject) => {
-            db.get(
-                'SELECT * FROM users WHERE apple_user_id = ?',
-                [appleUser.userId],
-                (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row);
-                }
-            );
-        });
-
+        const db = getDb();
         let userId;
-        if (existingUser) {
-            userId = existingUser.id;
-            // Update email if it changed (Apple allows email changes)
-            if (appleUser.email && appleUser.email !== existingUser.email) {
+        
+        if (db.type === 'prisma') {
+            // Use Prisma for PostgreSQL
+            const prisma = db.client;
+            
+            // Check if user exists
+            let existingUser = await prisma.user.findUnique({
+                where: { appleUserId: appleUser.userId }
+            });
+            
+            if (existingUser) {
+                userId = existingUser.id;
+                // Update email if it changed
+                if (appleUser.email && appleUser.email !== existingUser.email) {
+                    await prisma.user.update({
+                        where: { id: userId },
+                        data: { email: appleUser.email }
+                    });
+                }
+            } else {
+                // Create new user
+                userId = uuidv4();
+                await prisma.user.create({
+                    data: {
+                        id: userId,
+                        appleUserId: appleUser.userId,
+                        email: appleUser.email || null
+                    }
+                });
+            }
+        } else {
+            // Use SQLite
+            const sqliteDb = db.client;
+            
+            // Check if user exists
+            const existingUser = await new Promise((resolve, reject) => {
+                sqliteDb.get(
+                    'SELECT * FROM users WHERE apple_user_id = ?',
+                    [appleUser.userId],
+                    (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    }
+                );
+            });
+
+            if (existingUser) {
+                userId = existingUser.id;
+                // Update email if it changed (Apple allows email changes)
+                if (appleUser.email && appleUser.email !== existingUser.email) {
+                    await new Promise((resolve, reject) => {
+                        sqliteDb.run(
+                            'UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                            [appleUser.email, userId],
+                            (err) => {
+                                if (err) reject(err);
+                                else resolve();
+                            }
+                        );
+                    });
+                }
+            } else {
+                // Create new user
+                userId = uuidv4();
                 await new Promise((resolve, reject) => {
-                    db.run(
-                        'UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                        [appleUser.email, userId],
+                    sqliteDb.run(
+                        'INSERT INTO users (id, apple_user_id, email) VALUES (?, ?, ?)',
+                        [userId, appleUser.userId, appleUser.email || null],
                         (err) => {
                             if (err) reject(err);
                             else resolve();
@@ -52,19 +109,6 @@ router.post('/apple', validateAppleIDToken, async (req, res) => {
                     );
                 });
             }
-        } else {
-            // Create new user
-            userId = uuidv4();
-            await new Promise((resolve, reject) => {
-                db.run(
-                    'INSERT INTO users (id, apple_user_id, email) VALUES (?, ?, ?)',
-                    [userId, appleUser.userId, appleUser.email || null],
-                    (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    }
-                );
-            });
         }
 
         // Generate JWT token
