@@ -11,9 +11,15 @@ function loadSQLite() {
     
     if (!sqlite3) {
         try {
+            // Try to load sqlite3 - it might not be available in production
             sqlite3 = require('sqlite3').verbose();
             DB_PATH = process.env.DATABASE_PATH || './database.sqlite';
         } catch (error) {
+            // If sqlite3 is not available and no PostgreSQL URL, this is an error
+            if (!dbUrl) {
+                console.error('❌ ERROR: sqlite3 not available and no DATABASE_URL set. Please add PostgreSQL to Railway or ensure sqlite3 is installed.');
+                throw new Error('Database not configured: sqlite3 unavailable and no DATABASE_URL');
+            }
             console.warn('⚠️ sqlite3 module not available. Using PostgreSQL only.');
             return false;
         }

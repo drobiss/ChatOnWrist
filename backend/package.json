@@ -22,10 +22,8 @@
     "jsonwebtoken": "^9.0.2",
     "openai": "^4.20.1",
     "pg": "^8.11.3",
+    "sqlite3": "^5.1.6",
     "uuid": "^9.0.1"
-  },
-  "optionalDependencies": {
-    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.0",
