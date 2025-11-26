@@ -3,19 +3,19 @@ let sqlite3 = null;
 let DB_PATH = null;
 
 function loadSQLite() {
+    const dbUrl = process.env.DATABASE_URL || '';
+    // Only use SQLite if DATABASE_URL is not PostgreSQL
+    if (dbUrl.includes('postgresql://') || dbUrl.includes('postgres://')) {
+        return false; // Using PostgreSQL
+    }
+    
     if (!sqlite3) {
-        const dbUrl = process.env.DATABASE_URL || '';
-        // Only use SQLite if DATABASE_URL is not PostgreSQL
-        if (!dbUrl.includes('postgresql://') && !dbUrl.includes('postgres://')) {
-            try {
-                sqlite3 = require('sqlite3').verbose();
-                DB_PATH = process.env.DATABASE_PATH || './database.sqlite';
-            } catch (error) {
-                console.warn('⚠️ sqlite3 module not available. Using PostgreSQL only.');
-                return false;
-            }
-        } else {
-            return false; // Using PostgreSQL
+        try {
+            sqlite3 = require('sqlite3').verbose();
+            DB_PATH = process.env.DATABASE_PATH || './database.sqlite';
+        } catch (error) {
+            console.warn('⚠️ sqlite3 module not available. Using PostgreSQL only.');
+            return false;
         }
     }
     return sqlite3 !== null;
