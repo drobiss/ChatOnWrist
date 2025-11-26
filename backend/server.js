@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const deviceRoutes = require('./routes/device');
 const chatRoutes = require('./routes/chat');
 const { initializeDatabase, closeDatabase } = require('./database/init');
+const { initializePrisma, closePrisma } = require('./database/prisma');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -74,7 +75,197 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Admin endpoint to view users (PROTECTED - requires admin key)
+// Admin endpoint to view database (PROTECTED - requires admin key)
+app.get('/admin/dashboard', async (req, res) => {
+    try {
+        // Check for admin key in query parameter
+        const adminKey = req.query.key;
+        const expectedKey = process.env.ADMIN_KEY;
+        
+        if (!expectedKey) {
+            return res.status(503).json({ 
+                error: 'Admin endpoint not configured',
+                message: 'ADMIN_KEY environment variable is not set'
+            });
+        }
+        
+        if (!adminKey || adminKey !== expectedKey) {
+            return res.status(401).json({ 
+                error: 'Unauthorized - admin key required',
+                hint: 'Add ?key=your_admin_key to the URL'
+            });
+        }
+        
+        const dbUrl = process.env.DATABASE_URL || '';
+        const usePrisma = dbUrl.includes('postgresql://') || dbUrl.includes('postgres://');
+        
+        let users, devices, conversations, messages, recentMessages;
+        
+        if (usePrisma) {
+            // Use Prisma for PostgreSQL
+            const { getPrismaClient } = require('./database/prisma');
+            const prisma = getPrismaClient();
+            
+            [users, devices, conversations, messages, recentMessages] = await Promise.all([
+                prisma.user.findMany({
+                    orderBy: { createdAt: 'desc' },
+                    select: {
+                        id: true,
+                        appleUserId: true,
+                        email: true,
+                        createdAt: true,
+                        updatedAt: true
+                    }
+                }),
+                prisma.device.findMany({
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        user: {
+                            select: { email: true }
+                        }
+                    }
+                }),
+                prisma.conversation.findMany({
+                    orderBy: { updatedAt: 'desc' },
+                    include: {
+                        device: {
+                            include: {
+                                user: {
+                                    select: { email: true }
+                                }
+                            },
+                            select: { deviceType: true }
+                        },
+                        _count: {
+                            select: { messages: true }
+                        }
+                    }
+                }),
+                prisma.message.count(),
+                prisma.message.findMany({
+                    take: 20,
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        conversation: {
+                            include: {
+                                device: {
+                                    include: {
+                                        user: {
+                                            select: { email: true }
+                                        }
+                                    }
+                                },
+                                select: { title: true }
+                            }
+                        }
+                    }
+                })
+            ]);
+            
+            // Transform Prisma results to match expected format
+            devices = devices.map(d => ({
+                id: d.id,
+                device_type: d.deviceType,
+                device_token: d.deviceToken,
+                created_at: d.createdAt,
+                user_email: d.user?.email || null
+            }));
+            
+            conversations = conversations.map(c => ({
+                id: c.id,
+                title: c.title,
+                created_at: c.createdAt,
+                updated_at: c.updatedAt,
+                device_type: c.device?.deviceType || null,
+                user_email: c.device?.user?.email || null,
+                message_count: c._count.messages
+            }));
+            
+            recentMessages = recentMessages.map(m => ({
+                id: m.id,
+                content: m.content,
+                is_from_user: m.isFromUser,
+                created_at: m.createdAt,
+                conversation_title: m.conversation?.title || null,
+                user_email: m.conversation?.device?.user?.email || null
+            }));
+            
+        } else {
+            // Use SQLite (backward compatible)
+            const { getDatabase } = require('./database/init');
+            const db = getDatabase();
+            
+            [users, devices, conversations, messages, recentMessages] = await Promise.all([
+                new Promise((resolve, reject) => {
+                    db.all('SELECT id, apple_user_id, email, created_at, updated_at FROM users ORDER BY created_at DESC', (err, rows) => {
+                        if (err) reject(err);
+                        else resolve(rows);
+                    });
+                }),
+                new Promise((resolve, reject) => {
+                    db.all(`SELECT d.id, d.device_type, d.device_token, d.created_at, u.email as user_email 
+                            FROM devices d 
+                            LEFT JOIN users u ON d.user_id = u.id 
+                            ORDER BY d.created_at DESC`, (err, rows) => {
+                        if (err) reject(err);
+                        else resolve(rows);
+                    });
+                }),
+                new Promise((resolve, reject) => {
+                    db.all(`SELECT c.id, c.title, c.created_at, c.updated_at, 
+                                   d.device_type, u.email as user_email,
+                                   COUNT(m.id) as message_count
+                            FROM conversations c 
+                            LEFT JOIN devices d ON c.device_id = d.id 
+                            LEFT JOIN users u ON d.user_id = u.id
+                            LEFT JOIN messages m ON c.id = m.conversation_id
+                            GROUP BY c.id
+                            ORDER BY c.updated_at DESC`, (err, rows) => {
+                        if (err) reject(err);
+                        else resolve(rows);
+                    });
+                }),
+                new Promise((resolve, reject) => {
+                    db.get('SELECT COUNT(*) as count FROM messages', (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row?.count || 0);
+                    });
+                }),
+                new Promise((resolve, reject) => {
+                    db.all(`SELECT m.id, m.content, m.is_from_user, m.created_at,
+                                   c.title as conversation_title, u.email as user_email
+                            FROM messages m
+                            LEFT JOIN conversations c ON m.conversation_id = c.id
+                            LEFT JOIN devices d ON c.device_id = d.id
+                            LEFT JOIN users u ON d.user_id = u.id
+                            ORDER BY m.created_at DESC
+                            LIMIT 20`, (err, rows) => {
+                        if (err) reject(err);
+                        else resolve(rows);
+                    });
+                })
+            ]);
+        }
+        
+        res.json({
+            stats: {
+                users: users.length,
+                devices: devices.length,
+                conversations: conversations.length,
+                messages: messages
+            },
+            users: users,
+            devices: devices,
+            conversations: conversations,
+            recentMessages: recentMessages
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        res.status(500).json({ error: 'Failed to fetch dashboard data', details: error.message });
+    }
+});
+
+// Admin endpoint to view users (PROTECTED - requires admin key) - kept for backward compatibility
 app.get('/admin/users', async (req, res) => {
     try {
         // Check for admin key in query parameter
@@ -197,8 +388,17 @@ async function initializeServer() {
         console.log('Environment:', process.env.NODE_ENV || 'development');
         console.log('Port:', PORT);
         
-        await initializeDatabase();
-        console.log('Database initialized successfully');
+        // Try Prisma first (PostgreSQL), fallback to SQLite
+        const dbUrl = process.env.DATABASE_URL || '';
+        if (dbUrl.includes('postgresql://') || dbUrl.includes('postgres://')) {
+            console.log('📊 Using PostgreSQL with Prisma...');
+            await initializePrisma();
+            console.log('✅ Prisma initialized successfully');
+        } else {
+            console.log('📊 Using SQLite...');
+            await initializeDatabase();
+            console.log('✅ SQLite initialized successfully');
+        }
         
         // Update health endpoint to show database is ready
         app.get('/health', (req, res) => {
@@ -223,6 +423,7 @@ initializeServer();
 async function gracefulShutdown(signal) {
     console.log(`${signal} received, shutting down gracefully...`);
     try {
+        await closePrisma();
         await closeDatabase();
         console.log('Database closed successfully');
         process.exit(0);
