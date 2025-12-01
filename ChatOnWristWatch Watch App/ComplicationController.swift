@@ -164,18 +164,12 @@ struct ComplicationViewCircular: View {
                 .fill(complicationAccentColor.opacity(0.2))
             
             // Use custom ComplicationIcon if available, otherwise SF Symbol
-            if let customIcon = UIImage(named: "ComplicationIcon") {
-                Image(uiImage: customIcon)
-                    .renderingMode(.template)
-                    .foregroundColor(complicationAccentColor)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 20, height: 20)
-            } else {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(complicationAccentColor)
-            }
+            Image("ComplicationIcon")
+                .renderingMode(.template)
+                .foregroundColor(complicationAccentColor)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
         }
     }
 }
@@ -187,39 +181,26 @@ struct ComplicationViewCorner: View {
                 .fill(complicationAccentColor.opacity(0.2))
             
             // Use custom ComplicationIcon if available, otherwise SF Symbol
-            if let customIcon = UIImage(named: "ComplicationIcon") {
-                Image(uiImage: customIcon)
-                    .renderingMode(.template)
-                    .foregroundColor(complicationAccentColor)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 16, height: 16)
-            } else {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(complicationAccentColor)
-            }
+            Image("ComplicationIcon")
+                .renderingMode(.template)
+                .foregroundColor(complicationAccentColor)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 16, height: 16)
         }
     }
 }
 
 struct ComplicationViewRectangular: View {
     var body: some View {
-        // Use custom ComplicationIcon if available, otherwise SF Symbol
-        if let customIcon = UIImage(named: "ComplicationIcon") {
-            Image(uiImage: customIcon)
-                .renderingMode(.template)
-                .foregroundColor(complicationAccentColor)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(complicationAccentColor)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        // Use custom ComplicationIcon
+        Image("ComplicationIcon")
+            .renderingMode(.template)
+            .foregroundColor(complicationAccentColor)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 18, height: 18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
