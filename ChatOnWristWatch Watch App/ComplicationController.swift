@@ -71,7 +71,14 @@ class ComplicationController: NSObject, CLKComplicationDataSource {
     // MARK: - Template Creation
     
     private func createMicImageProvider() -> CLKImageProvider {
-        // Create SF Symbol image with proper configuration for complications
+        // Try to use custom ComplicationIcon first
+        if let customIcon = UIImage(named: "ComplicationIcon") {
+            let imageProvider = CLKImageProvider(onePieceImage: customIcon)
+            // Template images will be tinted automatically by the system
+            return imageProvider
+        }
+        
+        // Fallback to SF Symbol if custom icon not found
         let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold, scale: .medium)
         guard let micImage = UIImage(systemName: "mic.fill", withConfiguration: config) ?? 
                              UIImage(systemName: "mic", withConfiguration: config) else {
@@ -156,10 +163,19 @@ struct ComplicationViewCircular: View {
             Circle()
                 .fill(complicationAccentColor.opacity(0.2))
             
-            // Always use SF Symbol for reliability in complications
-            Image(systemName: "mic.fill")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(complicationAccentColor)
+            // Use custom ComplicationIcon if available, otherwise SF Symbol
+            if let customIcon = UIImage(named: "ComplicationIcon") {
+                Image(uiImage: customIcon)
+                    .renderingMode(.template)
+                    .foregroundColor(complicationAccentColor)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+            } else {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(complicationAccentColor)
+            }
         }
     }
 }
@@ -170,21 +186,40 @@ struct ComplicationViewCorner: View {
             Circle()
                 .fill(complicationAccentColor.opacity(0.2))
             
-            // Always use SF Symbol for reliability in complications
-            Image(systemName: "mic.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(complicationAccentColor)
+            // Use custom ComplicationIcon if available, otherwise SF Symbol
+            if let customIcon = UIImage(named: "ComplicationIcon") {
+                Image(uiImage: customIcon)
+                    .renderingMode(.template)
+                    .foregroundColor(complicationAccentColor)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+            } else {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(complicationAccentColor)
+            }
         }
     }
 }
 
 struct ComplicationViewRectangular: View {
     var body: some View {
-        // Just show the mic icon, centered
-            Image(systemName: "mic.fill")
-            .font(.system(size: 18, weight: .semibold))
+        // Use custom ComplicationIcon if available, otherwise SF Symbol
+        if let customIcon = UIImage(named: "ComplicationIcon") {
+            Image(uiImage: customIcon)
+                .renderingMode(.template)
                 .foregroundColor(complicationAccentColor)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(complicationAccentColor)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 }
 
