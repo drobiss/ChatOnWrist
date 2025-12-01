@@ -110,8 +110,6 @@ struct PairingView: View {
                 .foregroundColor(.gray)
             
             TextField("123456", text: $pairingCode)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.center)
                 .padding(8)
                 .background(Color.gray.opacity(0.2))
                 .cornerRadius(8)
