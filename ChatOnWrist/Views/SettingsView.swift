@@ -13,10 +13,6 @@ struct SettingsView: View {
     
     @State private var showingBackendStatus = false
     @State private var showingLogoutAlert = false
-    @State private var pairingCode: String?
-    @State private var pairingExpires: String?
-    @State private var isGeneratingCode = false
-    @State private var pairingError: String?
     
     var body: some View {
         NavigationView {
@@ -94,40 +90,6 @@ struct SettingsView: View {
                                 .foregroundColor(.orange)
                         }
                     }
-
-                    if let code = pairingCode {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("Pairing Code")
-                                    .font(.subheadline).bold()
-                                Spacer()
-                                Text(code)
-                                    .font(.title2).monospacedDigit()
-                            }
-                            if let expires = pairingExpires {
-                                Text("Expires at \(expires)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 6)
-                    }
-
-                    if let pairingError = pairingError {
-                        Text(pairingError)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-
-                    Button {
-                        Task { await generatePairingCode() }
-                    } label: {
-                        HStack {
-                            Image(systemName: "link")
-                            Text(isGeneratingCode ? "Generating..." : "Generate Pairing Code")
-                        }
-                    }
-                    .disabled(isGeneratingCode || !authService.isAuthenticated)
                 }
                 
                 // Backend Section
@@ -220,26 +182,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingBackendStatus) {
                 BackendStatusView()
-            }
-        }
-    }
-
-    private func generatePairingCode() async {
-        guard let userToken = authService.userAccessToken else {
-            pairingError = "Please sign in first."
-            return
-        }
-        pairingError = nil
-        isGeneratingCode = true
-        let result = await backendService.generatePairingCode(userToken: userToken)
-        await MainActor.run {
-            isGeneratingCode = false
-            switch result {
-            case .success(let response):
-                pairingCode = response.pairingCode
-                pairingExpires = response.expiresAt
-            case .failure(let error):
-                pairingError = error.localizedDescription
             }
         }
     }
