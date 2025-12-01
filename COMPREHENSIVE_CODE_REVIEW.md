@@ -8,20 +8,28 @@
 ## ✅ **FIXED ISSUES**
 
 ### 1. ✅ Backend Database Routes
-- **Status:** Fixed
+- **Status:** ✅ Fixed
 - **Issue:** Routes were using SQLite queries but PostgreSQL is configured
 - **Fix:** All routes now use `getDbClient()` which returns Prisma for PostgreSQL
 - **Files:** `backend/routes/auth.js`, `backend/routes/device.js`, `backend/routes/chat.js`
 
 ### 2. ✅ Device Route SQLite Fallback Bug
-- **Status:** Fixed
-- **Issue:** Line 67 in `device.js` had `db.client || db` which was incorrect
-- **Fix:** Changed to `db.client` only
-- **File:** `backend/routes/device.js:67`
+- **Status:** ✅ Fixed
+- **Issue:** Multiple places in `device.js` had incorrect SQLite access pattern
+- **Fix:** Changed all SQLite accesses to use `const sqliteDb = db.client` pattern
+- **File:** `backend/routes/device.js` (lines 95, 129, 180, 224)
 
-### 3. ✅ Watch App BackendService
-- **Status:** Working
-- **Note:** Watch app's `sendTestMessage` doesn't exclude duplicate messages like iOS app, but this is OK since Watch uses different flow
+### 3. ✅ Watch App BackendService Duplicate Exclusion
+- **Status:** ✅ Fixed
+- **Issue:** Watch app's `sendTestMessage` didn't exclude duplicate messages like iOS app
+- **Fix:** Added duplicate message exclusion logic matching iOS app
+- **File:** `ChatOnWristWatch Watch App/Services/BackendService.swift`
+
+### 4. ✅ Admin Users Endpoint PostgreSQL Support
+- **Status:** ✅ Fixed
+- **Issue:** `/admin/users` endpoint only worked with SQLite
+- **Fix:** Added Prisma support for PostgreSQL
+- **File:** `backend/server.js`
 
 ---
 
@@ -101,17 +109,17 @@
    - File: `backend/utils/appleAuth.js`
 
 ### Medium Priority
-2. **Add missing error code**
-   - Add `AUTH_ERROR` to ErrorCodes enum
+2. ~~**Add missing error code**~~ ✅ Already exists
+   - `AUTH_ERROR` is already defined in ErrorCodes enum
    - File: `backend/utils/errors.js`
 
-3. **Standardize sync method names**
-   - Use `sendAllConversationsToWatch()` consistently
+3. ~~**Standardize sync method names**~~ ✅ Working correctly
+   - `forceSync()` calls `sendAllConversationsToWatch()` internally
    - File: `ChatOnWrist/ContentView.swift`
 
 ### Low Priority
-4. **Add duplicate message exclusion to Watch BackendService**
-   - Match iOS app's logic in `sendTestMessage`
+4. ~~**Add duplicate message exclusion to Watch BackendService**~~ ✅ Fixed
+   - Added duplicate exclusion logic matching iOS app
    - File: `ChatOnWristWatch Watch App/Services/BackendService.swift`
 
 ---
