@@ -63,9 +63,9 @@ struct WatchHomeView: View {
                                 conversationToNavigate = nil
                             }
                     } else {
-                        WatchChatView(initialMessage: pendingDictationText)
-                            .environmentObject(conversationStore)
-                            .environmentObject(authService)
+                WatchChatView(initialMessage: pendingDictationText)
+                    .environmentObject(conversationStore)
+                    .environmentObject(authService)
                             .environmentObject(watchConnectivity)
                     }
                 }
@@ -79,7 +79,7 @@ struct WatchHomeView: View {
                         navigateToChat = true
                     }
                 })
-                .environmentObject(conversationStore)
+                    .environmentObject(conversationStore)
             }
             .sheet(isPresented: $showVoiceSettingsSheet) {
                 VoiceSettingsView()

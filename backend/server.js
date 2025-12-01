@@ -286,15 +286,33 @@ app.get('/admin/users', async (req, res) => {
             });
         }
         
-        const { getDatabase } = require('./database/init');
-        const db = getDatabase();
+        const dbUrl = process.env.DATABASE_URL || '';
+        const usePrisma = dbUrl.includes('postgresql://') || dbUrl.includes('postgres://');
         
-        const users = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM users ORDER BY created_at DESC', (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
+        let users;
+        if (usePrisma) {
+            const { getPrismaClient } = require('./database/prisma');
+            const prisma = getPrismaClient();
+            const prismaUsers = await prisma.user.findMany({
+                orderBy: { createdAt: 'desc' }
             });
-        });
+            users = prismaUsers.map(u => ({
+                id: u.id,
+                apple_user_id: u.appleUserId,
+                email: u.email,
+                created_at: u.createdAt.toISOString(),
+                updated_at: u.updatedAt.toISOString()
+            }));
+        } else {
+            const { getDatabase } = require('./database/init');
+            const db = getDatabase();
+            users = await new Promise((resolve, reject) => {
+                db.all('SELECT * FROM users ORDER BY created_at DESC', (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows);
+                });
+            });
+        }
         
         res.json({
             count: users.length,
@@ -302,7 +320,7 @@ app.get('/admin/users', async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching users:', error);
-        res.status(500).json({ error: 'Failed to fetch users' });
+        res.status(500).json({ error: 'Failed to fetch users', details: error.message });
     }
 });
 
@@ -397,7 +415,7 @@ async function initializeServer() {
             console.log('📊 Using PostgreSQL with Prisma...');
             await initializePrisma();
             console.log('✅ Prisma initialized successfully');
-            console.log('⚠️  NOTE: Routes still use SQLite queries. They need to be migrated to Prisma.');
+            console.log('✅ API routes are configured to use Prisma when PostgreSQL is available.');
         } else {
             console.log('📊 Using SQLite...');
             await initializeDatabase();

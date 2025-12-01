@@ -91,6 +91,7 @@ class ConversationSyncService: ObservableObject {
         // Listen for conversation requests from watch
         NotificationCenter.default.publisher(for: .watchConversationRequested)
             .sink { [weak self] _ in
+                print("📱 Watch requested all conversations - sending them now")
                 self?.sendAllConversationsToWatch()
             }
             .store(in: &cancellables)
@@ -157,14 +158,20 @@ class ConversationSyncService: ObservableObject {
     
     private func sendAllConversationsToWatch() {
         guard let conversationStore,
-              watchConnectivity.isWatchReachable else { return }
+              watchConnectivity.isWatchReachable else {
+            print("📱 Cannot send conversations: Watch not reachable or store not configured")
+            return
+        }
         
         // Filter out recently synced conversations to prevent loops
         let conversationsToSync = conversationStore.conversations.filter { conversation in
             !recentlySyncedConversationIds.contains(conversation.id)
         }
         
+        print("📱 Sending \(conversationsToSync.count) conversations to Watch")
+        
         for conversation in conversationsToSync {
+            print("📱 Sending conversation: \(conversation.title) (\(conversation.messages.count) messages)")
             watchConnectivity.sendConversationToWatch(conversation)
         }
         

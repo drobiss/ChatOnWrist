@@ -1,7 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const { getDatabase } = require('../database/init');
+const { getDbClient } = require('../database/client');
 
 const router = express.Router();
 
@@ -49,20 +49,34 @@ router.post('/pair', verifyUserToken, async (req, res) => {
             });
         }
 
-        const db = getDatabase();
-        
-        // Find valid pairing code
-        const pairingRecord = await new Promise((resolve, reject) => {
-            db.get(
-                `SELECT * FROM pairing_codes 
-                 WHERE code = ? AND user_id = ? AND expires_at > datetime('now') AND used = FALSE`,
-                [pairingCode, req.userId],
-                (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row);
+        const db = getDbClient();
+        let pairingRecord;
+
+        if (db.type === 'prisma') {
+            const prisma = db.client;
+            pairingRecord = await prisma.pairingCode.findFirst({
+                where: {
+                    code: pairingCode,
+                    userId: req.userId,
+                    expiresAt: { gt: new Date() },
+                    used: false
                 }
-            );
-        });
+            });
+        } else {
+            // SQLite fallback
+            const sqliteDb = db.client;
+            pairingRecord = await new Promise((resolve, reject) => {
+                sqliteDb.get(
+                    `SELECT * FROM pairing_codes 
+                     WHERE code = ? AND user_id = ? AND expires_at > datetime('now') AND used = FALSE`,
+                    [pairingCode, req.userId],
+                    (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    }
+                );
+            });
+        }
 
         if (!pairingRecord) {
             return res.status(400).json({
@@ -72,16 +86,24 @@ router.post('/pair', verifyUserToken, async (req, res) => {
         }
 
         // Mark pairing code as used
-        await new Promise((resolve, reject) => {
-            db.run(
-                'UPDATE pairing_codes SET used = TRUE WHERE id = ?',
-                [pairingRecord.id],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
+        if (db.type === 'prisma') {
+            await db.client.pairingCode.update({
+                where: { id: pairingRecord.id },
+                data: { used: true }
+            });
+        } else {
+            const sqliteDb = db.client;
+            await new Promise((resolve, reject) => {
+                sqliteDb.run(
+                    'UPDATE pairing_codes SET used = TRUE WHERE id = ?',
+                    [pairingRecord.id],
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+        }
 
         // Create device record
         const deviceId = uuidv4();
@@ -95,16 +117,28 @@ router.post('/pair', verifyUserToken, async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        await new Promise((resolve, reject) => {
-            db.run(
-                'INSERT INTO devices (id, user_id, device_type, device_token) VALUES (?, ?, ?, ?)',
-                [deviceId, req.userId, deviceType, deviceToken],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
+        if (db.type === 'prisma') {
+            await db.client.device.create({
+                data: {
+                    id: deviceId,
+                    userId: req.userId,
+                    deviceType,
+                    deviceToken
                 }
-            );
-        });
+            });
+        } else {
+            const sqliteDb = db.client;
+            await new Promise((resolve, reject) => {
+                sqliteDb.run(
+                    'INSERT INTO devices (id, user_id, device_type, device_token) VALUES (?, ?, ?, ?)',
+                    [deviceId, req.userId, deviceType, deviceToken],
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+        }
 
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -126,7 +160,7 @@ router.post('/pair', verifyUserToken, async (req, res) => {
 // POST /device/generate-pairing-code - Generate a new pairing code
 router.post('/generate-pairing-code', verifyUserToken, async (req, res) => {
     try {
-        const db = getDatabase();
+        const db = getDbClient();
         
         // Generate 6-digit pairing code
         const pairingCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -134,16 +168,28 @@ router.post('/generate-pairing-code', verifyUserToken, async (req, res) => {
         
         const codeId = uuidv4();
         
-        await new Promise((resolve, reject) => {
-            db.run(
-                'INSERT INTO pairing_codes (id, user_id, code, expires_at) VALUES (?, ?, ?, ?)',
-                [codeId, req.userId, pairingCode, expiresAt.toISOString()],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
+        if (db.type === 'prisma') {
+            await db.client.pairingCode.create({
+                data: {
+                    id: codeId,
+                    userId: req.userId,
+                    code: pairingCode,
+                    expiresAt
                 }
-            );
-        });
+            });
+        } else {
+            const sqliteDb = db.client;
+            await new Promise((resolve, reject) => {
+                sqliteDb.run(
+                    'INSERT INTO pairing_codes (id, user_id, code, expires_at) VALUES (?, ?, ?, ?)',
+                    [codeId, req.userId, pairingCode, expiresAt.toISOString()],
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+        }
 
         res.json({
             pairingCode,
@@ -162,18 +208,34 @@ router.post('/generate-pairing-code', verifyUserToken, async (req, res) => {
 // GET /device/devices - Get user's devices
 router.get('/devices', verifyUserToken, async (req, res) => {
     try {
-        const db = getDatabase();
+        const db = getDbClient();
         
-        const devices = await new Promise((resolve, reject) => {
-            db.all(
-                'SELECT id, device_type, created_at FROM devices WHERE user_id = ?',
-                [req.userId],
-                (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
-                }
-            );
-        });
+        let devices;
+
+        if (db.type === 'prisma') {
+            devices = await db.client.device.findMany({
+                where: { userId: req.userId },
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, deviceType: true, createdAt: true }
+            });
+            devices = devices.map(d => ({
+                id: d.id,
+                device_type: d.deviceType,
+                created_at: d.createdAt.toISOString()
+            }));
+        } else {
+            const sqliteDb = db.client;
+            devices = await new Promise((resolve, reject) => {
+                sqliteDb.all(
+                    'SELECT id, device_type, created_at FROM devices WHERE user_id = ?',
+                    [req.userId],
+                    (err, rows) => {
+                        if (err) reject(err);
+                        else resolve(rows);
+                    }
+                );
+            });
+        }
 
         res.json(devices);
 

@@ -108,6 +108,17 @@ final class ConversationStore: ObservableObject {
         moveConversationToTop(existingConversation)
         
         saveContext()
+        
+        // Sync message to iPhone
+        NotificationCenter.default.post(
+            name: .messageAdded,
+            object: nil,
+            userInfo: [
+                "message": message,
+                "conversationId": existingConversation.id.uuidString
+            ]
+        )
+        
 #if os(watchOS)
         ComplicationReloader.updateLatest(text: message.content)
 #endif

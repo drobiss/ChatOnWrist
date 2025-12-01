@@ -216,7 +216,7 @@ class WatchConnectivityService: NSObject, ObservableObject {
     
     private func encodeMessage(_ message: Message) -> [String: Any] {
         return [
-            "id": message.id,
+            "id": message.id.uuidString,
             "content": message.content,
             "isFromUser": message.isFromUser,
             "timestamp": message.timestamp.timeIntervalSince1970

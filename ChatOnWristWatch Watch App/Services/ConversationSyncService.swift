@@ -74,6 +74,20 @@ class ConversationSyncService: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+        
+        // Listen for new messages (only locally created ones)
+        NotificationCenter.default.publisher(for: .messageAdded)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let userInfo = notification.userInfo,
+                      let message = userInfo["message"] as? Message,
+                      let conversationId = userInfo["conversationId"] as? String,
+                      self.watchConnectivity.isPhoneReachable else { return }
+                
+                // Immediately sync message to iPhone
+                self.watchConnectivity.sendMessageToiPhone(message, conversationId: conversationId)
+            }
+            .store(in: &cancellables)
     }
     
     private func handleiPhoneMessage(_ notification: Notification) {
@@ -110,13 +124,20 @@ class ConversationSyncService: ObservableObject {
     private func handleiPhoneConversation(_ notification: Notification) {
         guard let conversationStore,
               let userInfo = notification.userInfo,
-              let conversation = userInfo["conversation"] as? Conversation else { return }
+              let conversation = userInfo["conversation"] as? Conversation else {
+            print("⌚️ Failed to handle iPhone conversation: missing data")
+            return
+        }
+        
+        print("⌚️ Received conversation from iPhone: \(conversation.title) (\(conversation.messages.count) messages)")
         
         // Mark that we're processing incoming sync to prevent re-syncing
         isProcessingIncomingSync = true
         
         // Insert conversation if it doesn't exist
         conversationStore.insertConversationIfNeeded(conversation)
+        
+        print("⌚️ Inserted conversation. Total conversations: \(conversationStore.conversations.count)")
         
         // Mark this conversation as recently synced to prevent re-syncing it back
         recentlySyncedConversationIds.insert(conversation.id)

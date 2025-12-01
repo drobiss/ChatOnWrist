@@ -74,6 +74,11 @@ class BackendService: ObservableObject {
         
         return await makeRequest(endpoint: endpoint, method: "POST", body: request, authToken: userToken)
     }
+
+    func generatePairingCode(userToken: String) async -> Result<PairingCodeResponse, BackendError> {
+        let endpoint = "/device/generate-pairing-code"
+        return await makeRequest(endpoint: endpoint, method: "POST", body: EmptyBody(), authToken: userToken)
+    }
     
     // MARK: - Chat
     
@@ -244,6 +249,11 @@ struct DevicePairRequest: Codable {
 struct DevicePairResponse: Codable {
     let deviceToken: String
     let deviceId: String
+    let expiresAt: String
+}
+
+struct PairingCodeResponse: Codable {
+    let pairingCode: String
     let expiresAt: String
 }
 

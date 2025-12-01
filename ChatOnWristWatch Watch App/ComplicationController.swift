@@ -181,9 +181,9 @@ struct ComplicationViewCorner: View {
 struct ComplicationViewRectangular: View {
     var body: some View {
         // Just show the mic icon, centered
-        Image(systemName: "mic.fill")
+            Image(systemName: "mic.fill")
             .font(.system(size: 18, weight: .semibold))
-            .foregroundColor(complicationAccentColor)
+                .foregroundColor(complicationAccentColor)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

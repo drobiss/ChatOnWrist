@@ -23,10 +23,6 @@ struct SimpleChatView: View {
             ZStack {
                 // True black background with subtle glow
                 Color.black.ignoresSafeArea()
-                    .onTapGesture {
-                        // Dismiss keyboard when tapping background
-                        isTextFieldFocused = false
-                    }
                 iOSPalette.backgroundGlow.ignoresSafeArea()
                 
                 VStack(spacing: 0) {
@@ -58,7 +54,19 @@ struct SimpleChatView: View {
                             }
                             .padding(.horizontal, 20)
                             .padding(.vertical, 16)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                // Dismiss keyboard when tapping in scroll view
+                                isTextFieldFocused = false
+                            }
                         }
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 5)
+                                .onChanged { _ in
+                                    // Dismiss keyboard when scrolling
+                                    isTextFieldFocused = false
+                                }
+                        )
                         .onChange(of: conversationStore.currentConversation?.messages.count) { oldCount, newCount in
                             guard let newCount, let oldCount, newCount > oldCount,
                                   let lastMessage = conversationStore.currentConversation?.messages.last else { return }
@@ -69,35 +77,41 @@ struct SimpleChatView: View {
                     }
                     
                     // Input area
-                    HStack(spacing: 12) {
-                        TextField("Type a message...", text: $messageText, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 16))
-                            .foregroundColor(iOSPalette.textPrimary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                            .stroke(iOSPalette.glassBorder, lineWidth: 0.5)
-                                    )
-                            )
-                            .lineLimit(1...5)
-                            .focused($isTextFieldFocused)
-                            .onSubmit {
-                                if !messageText.isEmpty && !isProcessing {
-                                    sendMessage()
+                    HStack(spacing: 0) {
+                        // Text field with integrated send button
+                        ZStack(alignment: .trailing) {
+                            TextField("Type a message...", text: $messageText, axis: .vertical)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 16))
+                                .foregroundColor(iOSPalette.textPrimary)
+                                .padding(.leading, 16)
+                                .padding(.trailing, 50) // Space for button
+                                .padding(.vertical, 12)
+                                .lineLimit(1...5)
+                                .focused($isTextFieldFocused)
+                                .onSubmit {
+                                    if !messageText.isEmpty && !isProcessing {
+                                        sendMessage()
+                                    }
                                 }
+                            
+                            // Send button inside the text field
+                            Button(action: sendMessage) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(messageText.isEmpty ? iOSPalette.textTertiary : iOSPalette.accent)
                             }
-                        
-                        Button(action: sendMessage) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(messageText.isEmpty ? iOSPalette.textTertiary : iOSPalette.accent)
+                            .disabled(messageText.isEmpty || isProcessing)
+                            .padding(.trailing, 8)
                         }
-                        .disabled(messageText.isEmpty || isProcessing)
+                        .background(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                        .stroke(iOSPalette.glassBorder, lineWidth: 0.5)
+                                )
+                        )
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
@@ -113,10 +127,22 @@ struct SimpleChatView: View {
                         )
                     )
                 }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Dismiss keyboard when tapping anywhere outside text field
+                    isTextFieldFocused = false
+                }
             }
             .navigationTitle("Chat")
             .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.dark)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { _ in
+                        // Dismiss keyboard when scrolling/dragging
+                        isTextFieldFocused = false
+                    }
+            )
             .onAppear {
                 // Create conversation if needed
                 if conversationStore.currentConversation == nil {

@@ -56,14 +56,20 @@ class WatchConnectivityService: NSObject, ObservableObject {
     }
     
     func requestConversationFromiPhone() {
-        guard isPhoneReachable else { return }
+        guard isPhoneReachable else {
+            print("⌚️ Cannot request conversations: iPhone not reachable")
+            return
+        }
         
+        print("⌚️ Sending conversation request to iPhone")
         let data: [String: Any] = [
             "type": "conversationRequest"
         ]
         
-        session.sendMessage(data, replyHandler: nil) { error in
-            print("Error requesting conversation from iPhone: \(error.localizedDescription)")
+        session.sendMessage(data, replyHandler: { response in
+            print("⌚️ Conversation request sent successfully, received reply: \(response)")
+        }) { error in
+            print("⌚️ Error requesting conversation from iPhone: \(error.localizedDescription)")
         }
     }
     
@@ -171,7 +177,7 @@ class WatchConnectivityService: NSObject, ObservableObject {
     
     private func encodeMessage(_ message: Message) -> [String: Any] {
         return [
-            "id": message.id,
+            "id": message.id.uuidString,
             "content": message.content,
             "isFromUser": message.isFromUser,
             "timestamp": message.timestamp.timeIntervalSince1970
@@ -274,5 +280,6 @@ extension Notification.Name {
     static let iphoneUserTokenReceived = Notification.Name("iphoneUserTokenReceived")
     static let iphoneLogoutReceived = Notification.Name("iphoneLogoutReceived")
     static let conversationCreated = Notification.Name("conversationCreated")
+    static let messageAdded = Notification.Name("messageAdded")
 }
 

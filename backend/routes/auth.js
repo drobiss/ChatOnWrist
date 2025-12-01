@@ -1,28 +1,10 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const { getDatabase } = require('../database/init');
-const { getPrismaClient } = require('../database/prisma');
+const { getDbClient } = require('../database/client');
 const { validateAppleIDToken } = require('../middleware/validation');
 const { sendError, ErrorCodes } = require('../utils/errors');
 const { verifyAppleIDToken } = require('../utils/appleAuth');
-
-// Helper to get database (Prisma or SQLite)
-function getDb() {
-    const dbUrl = process.env.DATABASE_URL || '';
-    if (dbUrl.includes('postgresql://') || dbUrl.includes('postgres://')) {
-        return { type: 'prisma', client: getPrismaClient() };
-    }
-    try {
-        return { type: 'sqlite', client: getDatabase() };
-    } catch (error) {
-        // If SQLite fails, try Prisma as fallback
-        if (dbUrl) {
-            return { type: 'prisma', client: getPrismaClient() };
-        }
-        throw error;
-    }
-}
 
 const router = express.Router();
 
@@ -40,7 +22,7 @@ router.post('/apple', validateAppleIDToken, async (req, res) => {
         
         console.log('✅ Verified Apple ID token for user:', appleUser.userId);
 
-        const db = getDb();
+        const db = getDbClient();
         let userId;
         
         if (db.type === 'prisma') {

@@ -2,7 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
-const { getDatabase } = require('../database/init');
+const { getDbClient } = require('../database/client');
 const { validateMessage, validateConversation } = require('../middleware/validation');
 const { sendError, ErrorCodes } = require('../utils/errors');
 
@@ -155,53 +155,116 @@ router.post('/message', verifyDeviceToken, validateMessage, async (req, res) => 
             });
         }
 
-        const db = getDatabase();
+        const db = getDbClient();
         let currentConversationId = conversationId;
+        let conversationHistory = [];
 
-        // If no conversation ID provided, create a new conversation
-        if (!currentConversationId) {
-            currentConversationId = uuidv4();
-            const title = message.length > 50 ? message.substring(0, 50) + '...' : message;
-            
+        if (db.type === 'prisma') {
+            const prisma = db.client;
+
+            // Ensure the conversation exists and belongs to this device
+            if (currentConversationId) {
+                const existingConversation = await prisma.conversation.findUnique({
+                    where: { id: currentConversationId }
+                });
+
+                if (!existingConversation || existingConversation.deviceId !== req.deviceId) {
+                    return sendError(res, 404, 'Conversation not found', ErrorCodes.CONVERSATION_NOT_FOUND);
+                }
+            } else {
+                currentConversationId = uuidv4();
+                const title = message.length > 50 ? `${message.substring(0, 50)}...` : message;
+                
+                await prisma.conversation.create({
+                    data: {
+                        id: currentConversationId,
+                        deviceId: req.deviceId,
+                        title
+                    }
+                });
+            }
+
+            await prisma.message.create({
+                data: {
+                    id: uuidv4(),
+                    conversationId: currentConversationId,
+                    content: message,
+                    isFromUser: true
+                }
+            });
+
+            const prismaHistory = await prisma.message.findMany({
+                where: { conversationId: currentConversationId },
+                orderBy: { createdAt: 'asc' },
+                take: 20
+            });
+            conversationHistory = prismaHistory.map(msg => ({
+                content: msg.content,
+                isFromUser: msg.isFromUser
+            }));
+        } else {
+            const sqliteDb = db.client;
+
+            if (currentConversationId) {
+                const existingConversation = await new Promise((resolve, reject) => {
+                    sqliteDb.get(
+                        'SELECT id FROM conversations WHERE id = ? AND device_id = ?',
+                        [currentConversationId, req.deviceId],
+                        (err, row) => {
+                            if (err) reject(err);
+                            else resolve(row);
+                        }
+                    );
+                });
+
+                if (!existingConversation) {
+                    return sendError(res, 404, 'Conversation not found', ErrorCodes.CONVERSATION_NOT_FOUND);
+                }
+            } else {
+                currentConversationId = uuidv4();
+                const title = message.length > 50 ? `${message.substring(0, 50)}...` : message;
+                
+                await new Promise((resolve, reject) => {
+                    sqliteDb.run(
+                        'INSERT INTO conversations (id, device_id, title) VALUES (?, ?, ?)',
+                        [currentConversationId, req.deviceId, title],
+                        (err) => {
+                            if (err) reject(err);
+                            else resolve();
+                        }
+                    );
+                });
+            }
+
             await new Promise((resolve, reject) => {
-                db.run(
-                    'INSERT INTO conversations (id, device_id, title) VALUES (?, ?, ?)',
-                    [currentConversationId, req.deviceId, title],
+                sqliteDb.run(
+                    'INSERT INTO messages (id, conversation_id, content, is_from_user) VALUES (?, ?, ?, ?)',
+                    [uuidv4(), currentConversationId, message, true],
                     (err) => {
                         if (err) reject(err);
                         else resolve();
                     }
                 );
             });
+
+            const historyRows = await new Promise((resolve, reject) => {
+                sqliteDb.all(
+                    `SELECT content, is_from_user FROM messages 
+                     WHERE conversation_id = ? 
+                     ORDER BY created_at ASC 
+                     LIMIT 20`,
+                    [currentConversationId],
+                    (err, rows) => {
+                        if (err) reject(err);
+                        else resolve(rows);
+                    }
+                );
+            });
+            conversationHistory = historyRows.map(msg => ({
+                content: msg.content,
+                isFromUser: !!msg.is_from_user
+            }));
         }
-
-        // Save user message
-        const userMessageId = uuidv4();
-        await new Promise((resolve, reject) => {
-            db.run(
-                'INSERT INTO messages (id, conversation_id, content, is_from_user) VALUES (?, ?, ?, ?)',
-                [userMessageId, currentConversationId, message, true],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
-
-        // Get conversation history for context
-        const conversationHistory = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT content, is_from_user FROM messages 
-                 WHERE conversation_id = ? 
-                 ORDER BY created_at ASC 
-                 LIMIT 20`,
-                [currentConversationId],
-                (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
-                }
-            );
-        });
 
         // Prepare messages for OpenAI
         const messages = [
@@ -210,7 +273,7 @@ router.post('/message', verifyDeviceToken, validateMessage, async (req, res) => 
                 content: baseSystemPrompt
             },
             ...conversationHistory.map(msg => ({
-                role: msg.is_from_user ? 'user' : 'assistant',
+                role: msg.isFromUser ? 'user' : 'assistant',
                 content: msg.content
             }))
         ];
@@ -237,28 +300,44 @@ router.post('/message', verifyDeviceToken, validateMessage, async (req, res) => 
 
         // Save AI response
         const aiMessageId = uuidv4();
-        await new Promise((resolve, reject) => {
-            db.run(
-                'INSERT INTO messages (id, conversation_id, content, is_from_user) VALUES (?, ?, ?, ?)',
-                [aiMessageId, currentConversationId, aiResponse, false],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
+        if (db.type === 'prisma') {
+            await db.client.message.create({
+                data: {
+                    id: aiMessageId,
+                    conversationId: currentConversationId,
+                    content: aiResponse,
+                    isFromUser: false
                 }
-            );
-        });
+            });
 
-        // Update conversation timestamp
-        await new Promise((resolve, reject) => {
-            db.run(
-                'UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                [currentConversationId],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
+            await db.client.conversation.update({
+                where: { id: currentConversationId },
+                data: { updatedAt: new Date() }
+            });
+        } else {
+            const sqliteDb = db.client;
+            await new Promise((resolve, reject) => {
+                sqliteDb.run(
+                    'INSERT INTO messages (id, conversation_id, content, is_from_user) VALUES (?, ?, ?, ?)',
+                    [aiMessageId, currentConversationId, aiResponse, false],
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+
+            await new Promise((resolve, reject) => {
+                sqliteDb.run(
+                    'UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    [currentConversationId],
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+        }
 
         res.json({
             response: aiResponse,
@@ -282,52 +361,86 @@ router.post('/message', verifyDeviceToken, validateMessage, async (req, res) => 
 // GET /chat/conversations - Get all conversations for the device
 router.get('/conversations', verifyDeviceToken, async (req, res) => {
     try {
-        const db = getDatabase();
-        
-        const conversations = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT c.id, c.title, c.created_at, c.updated_at,
-                        (SELECT content FROM messages 
-                         WHERE conversation_id = c.id 
-                         ORDER BY created_at DESC LIMIT 1) as last_message
-                 FROM conversations c 
-                 WHERE c.device_id = ? 
-                 ORDER BY c.updated_at DESC`,
-                [req.deviceId],
-                (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
-                }
-            );
-        });
+        const db = getDbClient();
+        let conversationsWithMessages;
 
-        // Get messages for each conversation
-        const conversationsWithMessages = await Promise.all(
-            conversations.map(async (conv) => {
-                const messages = await new Promise((resolve, reject) => {
-                    db.all(
-                        `SELECT id, content, is_from_user, created_at as timestamp
-                         FROM messages 
-                         WHERE conversation_id = ? 
-                         ORDER BY created_at ASC`,
-                        [conv.id],
-                        (err, rows) => {
-                            if (err) reject(err);
-                            else resolve(rows);
+        if (db.type === 'prisma') {
+            const prisma = db.client;
+            const conversations = await prisma.conversation.findMany({
+                where: { deviceId: req.deviceId },
+                orderBy: { updatedAt: 'desc' },
+                include: {
+                    messages: {
+                        orderBy: { createdAt: 'asc' },
+                        select: {
+                            id: true,
+                            content: true,
+                            isFromUser: true,
+                            createdAt: true
                         }
-                    );
-                });
+                    }
+                }
+            });
 
-                return {
-                    id: conv.id,
-                    title: conv.title,
-                    lastMessage: conv.last_message || '',
-                    createdAt: conv.created_at,
-                    updatedAt: conv.updated_at,
-                    messages: messages
-                };
-            })
-        );
+            conversationsWithMessages = conversations.map(conv => ({
+                id: conv.id,
+                title: conv.title,
+                lastMessage: conv.messages.length > 0 ? conv.messages[conv.messages.length - 1].content : '',
+                createdAt: conv.createdAt.toISOString(),
+                updatedAt: conv.updatedAt.toISOString(),
+                messages: conv.messages.map(msg => ({
+                    id: msg.id,
+                    content: msg.content,
+                    isFromUser: msg.isFromUser,
+                    timestamp: msg.createdAt.toISOString()
+                }))
+            }));
+        } else {
+            const sqliteDb = db.client;
+            const conversations = await new Promise((resolve, reject) => {
+                sqliteDb.all(
+                    `SELECT c.id, c.title, c.created_at, c.updated_at,
+                            (SELECT content FROM messages 
+                             WHERE conversation_id = c.id 
+                             ORDER BY created_at DESC LIMIT 1) as last_message
+                     FROM conversations c 
+                     WHERE c.device_id = ? 
+                     ORDER BY c.updated_at DESC`,
+                    [req.deviceId],
+                    (err, rows) => {
+                        if (err) reject(err);
+                        else resolve(rows);
+                    }
+                );
+            });
+
+            conversationsWithMessages = await Promise.all(
+                conversations.map(async (conv) => {
+                    const messages = await new Promise((resolve, reject) => {
+                        sqliteDb.all(
+                            `SELECT id, content, is_from_user, created_at as timestamp
+                             FROM messages 
+                             WHERE conversation_id = ? 
+                             ORDER BY created_at ASC`,
+                            [conv.id],
+                            (err, rows) => {
+                                if (err) reject(err);
+                                else resolve(rows);
+                            }
+                        );
+                    });
+
+                    return {
+                        id: conv.id,
+                        title: conv.title,
+                        lastMessage: conv.last_message || '',
+                        createdAt: conv.created_at,
+                        updatedAt: conv.updated_at,
+                        messages: messages
+                    };
+                })
+            );
+        }
 
         res.json(conversationsWithMessages);
 
@@ -341,47 +454,85 @@ router.get('/conversations', verifyDeviceToken, async (req, res) => {
 router.get('/conversations/:id', verifyDeviceToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const db = getDatabase();
-        
-        // Verify conversation belongs to this device
-        const conversation = await new Promise((resolve, reject) => {
-            db.get(
-                'SELECT * FROM conversations WHERE id = ? AND device_id = ?',
-                [id, req.deviceId],
-                (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row);
-                }
-            );
-        });
+        const db = getDbClient();
 
-        if (!conversation) {
-            return sendError(res, 404, 'Conversation not found', ErrorCodes.CONVERSATION_NOT_FOUND);
+        if (db.type === 'prisma') {
+            const prisma = db.client;
+            const conversation = await prisma.conversation.findUnique({
+                where: { id },
+                include: {
+                    messages: {
+                        orderBy: { createdAt: 'asc' },
+                        select: {
+                            id: true,
+                            content: true,
+                            isFromUser: true,
+                            createdAt: true
+                        }
+                    }
+                }
+            });
+
+            if (!conversation || conversation.deviceId !== req.deviceId) {
+                return sendError(res, 404, 'Conversation not found', ErrorCodes.CONVERSATION_NOT_FOUND);
+            }
+
+            res.json({
+                id: conversation.id,
+                title: conversation.title,
+                lastMessage: conversation.messages.length > 0 ? conversation.messages[conversation.messages.length - 1].content : '',
+                createdAt: conversation.createdAt.toISOString(),
+                updatedAt: conversation.updatedAt.toISOString(),
+                messages: conversation.messages.map(msg => ({
+                    id: msg.id,
+                    content: msg.content,
+                    isFromUser: msg.isFromUser,
+                    timestamp: msg.createdAt.toISOString()
+                }))
+            });
+        } else {
+            const sqliteDb = db.client;
+            
+            // Verify conversation belongs to this device
+            const conversation = await new Promise((resolve, reject) => {
+                sqliteDb.get(
+                    'SELECT * FROM conversations WHERE id = ? AND device_id = ?',
+                    [id, req.deviceId],
+                    (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    }
+                );
+            });
+
+            if (!conversation) {
+                return sendError(res, 404, 'Conversation not found', ErrorCodes.CONVERSATION_NOT_FOUND);
+            }
+
+            // Get messages
+            const messages = await new Promise((resolve, reject) => {
+                sqliteDb.all(
+                    `SELECT id, content, is_from_user, created_at as timestamp
+                     FROM messages 
+                     WHERE conversation_id = ? 
+                     ORDER BY created_at ASC`,
+                    [id],
+                    (err, rows) => {
+                        if (err) reject(err);
+                        else resolve(rows);
+                    }
+                );
+            });
+
+            res.json({
+                id: conversation.id,
+                title: conversation.title,
+                lastMessage: messages.length > 0 ? messages[messages.length - 1].content : '',
+                createdAt: conversation.created_at,
+                updatedAt: conversation.updated_at,
+                messages: messages
+            });
         }
-
-        // Get messages
-        const messages = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT id, content, is_from_user, created_at as timestamp
-                 FROM messages 
-                 WHERE conversation_id = ? 
-                 ORDER BY created_at ASC`,
-                [id],
-                (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
-                }
-            );
-        });
-
-        res.json({
-            id: conversation.id,
-            title: conversation.title,
-            lastMessage: messages.length > 0 ? messages[messages.length - 1].content : '',
-            createdAt: conversation.created_at,
-            updatedAt: conversation.updated_at,
-            messages: messages
-        });
 
     } catch (error) {
         console.error('Get conversation error:', error);

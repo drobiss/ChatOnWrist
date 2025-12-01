@@ -74,6 +74,11 @@ class BackendService: ObservableObject {
         
         return await makeRequest(endpoint: endpoint, method: "POST", body: request, authToken: userToken)
     }
+
+    func generatePairingCode(userToken: String) async -> Result<PairingCodeResponse, BackendError> {
+        let endpoint = "/device/generate-pairing-code"
+        return await makeRequest(endpoint: endpoint, method: "POST", body: EmptyBody(), authToken: userToken)
+    }
     
     // MARK: - Chat
     
@@ -86,13 +91,34 @@ class BackendService: ObservableObject {
 
     func sendTestMessage(message: String, conversation: Conversation) async -> Result<ChatResponse, BackendError> {
         let endpoint = "/chat/test"
-        let recentMessages = Array(conversation.messages.suffix(20))
-        let history = recentMessages.map { message -> ChatMessagePayload in
+        
+        // Get messages from conversation, but exclude the last message if it matches the current message
+        // This prevents duplicating the new message in the history
+        var messagesToUse = conversation.messages
+        
+        // If the last message is a user message matching what we're sending, exclude it from history
+        // (since we're sending it separately in the 'message' field)
+        if let lastMessage = messagesToUse.last,
+           lastMessage.isFromUser,
+           lastMessage.content.trimmingCharacters(in: .whitespacesAndNewlines) == message.trimmingCharacters(in: .whitespacesAndNewlines) {
+            messagesToUse = Array(messagesToUse.dropLast())
+            print("📤 Excluded last message from history (it matches the new message being sent)")
+        }
+        
+        // Get recent messages (up to 20)
+        let recentMessages = Array(messagesToUse.suffix(20))
+        
+        let history = recentMessages.map { msg -> ChatMessagePayload in
             ChatMessagePayload(
-                role: message.isFromUser ? "user" : "assistant",
-                content: message.content
+                role: msg.isFromUser ? "user" : "assistant",
+                content: msg.content
             )
         }
+        
+        print("📤 BackendService: Sending test message")
+        print("  Message: \(message)")
+        print("  History count: \(history.count)")
+        
         let request = TestChatRequest(
             message: message,
             conversation: history
@@ -214,6 +240,11 @@ struct DevicePairRequest: Codable {
 struct DevicePairResponse: Codable {
     let deviceToken: String
     let deviceId: String
+    let expiresAt: String
+}
+
+struct PairingCodeResponse: Codable {
+    let pairingCode: String
     let expiresAt: String
 }
 

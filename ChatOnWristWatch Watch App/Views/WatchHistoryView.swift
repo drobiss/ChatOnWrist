@@ -20,77 +20,77 @@ struct WatchHistoryView: View {
     }
     
     var body: some View {
-            ZStack {
-                // True black background with subtle glow
-                WatchPalette.background.ignoresSafeArea()
-                WatchPalette.backgroundGlow.ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    if conversationStore.conversations.isEmpty {
-                        emptyState
-                    } else {
-                        conversationList
+        ZStack {
+            // True black background with subtle glow
+            WatchPalette.background.ignoresSafeArea()
+            WatchPalette.backgroundGlow.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                if conversationStore.conversations.isEmpty {
+                    emptyState
+                } else {
+                    conversationList
+                }
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: { dismiss() }) {
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.3),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.25),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 0.5
+                                    )
+                            )
+                            .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
+                            .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
+                        
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.white)
                     }
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(action: { dismiss() }) {
-                        ZStack {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .frame(width: 28, height: 28)
-                                .background(
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.3),
-                                                    Color.white.opacity(0.1)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.25),
-                                                    Color.white.opacity(0.1)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 0.5
-                                        )
-                                )
-                                .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
-                                .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
-                            
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .buttonStyle(GlassMenuButtonStyle())
+                .buttonStyle(GlassMenuButtonStyle())
                 }
+        }
+        .confirmationDialog(
+            "Delete All Conversations?",
+            isPresented: $showDeleteAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete All", role: .destructive) {
+                conversationStore.deleteAllConversations()
             }
-            .confirmationDialog(
-                "Delete All Conversations?",
-                isPresented: $showDeleteAllConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete All", role: .destructive) {
-                    conversationStore.deleteAllConversations()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will permanently delete all \(conversationStore.conversations.count) conversations. This action cannot be undone.")
-            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete all \(conversationStore.conversations.count) conversations. This action cannot be undone.")
+        }
     }
     
     private var conversationList: some View {

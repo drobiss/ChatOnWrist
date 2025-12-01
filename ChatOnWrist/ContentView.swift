@@ -29,6 +29,16 @@ struct ContentView: View {
                             print("📱 MainTabView appeared - sending token to Watch")
                             watchConnectivity.sendUserTokenToWatch(token)
                         }
+                        
+                        // Send all conversations to Watch on startup to sync history
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            if watchConnectivity.isWatchReachable {
+                                print("📱 Sending all conversations to Watch on startup")
+                                syncService.forceSync()
+                            } else {
+                                print("📱 Watch not reachable yet, will sync when Watch requests")
+                            }
+                        }
                     }
                     .transition(.opacity)
             } else {
