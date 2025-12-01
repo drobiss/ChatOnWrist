@@ -68,6 +68,13 @@ class BackendService: ObservableObject {
         return await makeRequest(endpoint: endpoint, method: "POST", body: request)
     }
     
+    func autoPairDevice(userToken: String, deviceType: String = "iphone") async -> Result<DevicePairResponse, BackendError> {
+        let endpoint = "/device/auto-pair"
+        let request = ["deviceType": deviceType]
+        
+        return await makeRequest(endpoint: endpoint, method: "POST", body: request, authToken: userToken)
+    }
+    
     func pairDevice(pairingCode: String, userToken: String) async -> Result<DevicePairResponse, BackendError> {
         let endpoint = "/device/pair"
         let request = DevicePairRequest(pairingCode: pairingCode)
@@ -240,6 +247,10 @@ struct UserAuthResponse: Codable {
     let userToken: String
     let userId: String
     let expiresAt: String
+}
+
+struct AutoPairRequest: Codable {
+    let deviceType: String
 }
 
 struct DevicePairRequest: Codable {

@@ -105,6 +105,22 @@ class AuthenticationService: NSObject, ObservableObject {
                 self.isAuthenticated = true
                 self.keychain.save(key: "userAccessToken", value: response.userToken)
                 
+                // Auto-pair device after authentication (no pairing code needed)
+                Task {
+                    let pairResult = await self.backendService.autoPairDevice(userToken: response.userToken, deviceType: "iphone")
+                    await MainActor.run {
+                        switch pairResult {
+                        case .success(let pairResponse):
+                            print("✅ Device auto-paired successfully")
+                            self.deviceToken = pairResponse.deviceToken
+                            self.keychain.save(key: "deviceToken", value: pairResponse.deviceToken)
+                        case .failure(let error):
+                            print("⚠️ Auto-pair failed (will use test endpoint): \(error.localizedDescription)")
+                            // Don't show error to user - app will work with test endpoint
+                        }
+                    }
+                }
+                
                 // Notify that authentication completed (Watch can request token if needed)
                 NotificationCenter.default.post(name: .userAuthenticated, object: nil)
             case .failure(let error):

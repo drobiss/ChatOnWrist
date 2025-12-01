@@ -214,7 +214,7 @@ struct SimpleChatView: View {
             watchConnectivity.sendMessageToWatch(userMessage, conversationId: conversation.id.uuidString)
         }
         
-        // Send to backend - match Watch app approach exactly
+        // Send to backend - use device token if available, otherwise test endpoint
         isProcessing = true
         Task {
             // Get updated conversation from store (same as Watch app)
@@ -223,10 +223,21 @@ struct SimpleChatView: View {
                 return conversationStore.currentConversation ?? conversation
             }
             
-            let result = await backendService.sendTestMessage(
-                message: text,
-                conversation: updatedConversation
-            )
+            let result: Result<ChatResponse, BackendError>
+            if let deviceToken = authService.deviceToken, !deviceToken.isEmpty {
+                // Use production endpoint with device token (saves to database)
+                result = await backendService.sendMessage(
+                    message: text,
+                    conversationId: conversation.remoteId,
+                    deviceToken: deviceToken
+                )
+            } else {
+                // Fallback to test endpoint (no database save)
+                result = await backendService.sendTestMessage(
+                    message: text,
+                    conversation: updatedConversation
+                )
+            }
             
             await MainActor.run {
                 isProcessing = false
@@ -236,6 +247,11 @@ struct SimpleChatView: View {
                     print("✅ Received response: \(response.response.prefix(50))...")
                     let aiMessage = Message(content: response.response, isFromUser: false)
                     conversationStore.addMessage(aiMessage, to: conversation)
+                    
+                    // Update remote ID if using production endpoint
+                    if let deviceToken = authService.deviceToken, !deviceToken.isEmpty {
+                        conversationStore.updateRemoteId(response.conversationId, for: conversation.id)
+                    }
                     
                     // Send to watch if available
                     if watchConnectivity.isWatchReachable {

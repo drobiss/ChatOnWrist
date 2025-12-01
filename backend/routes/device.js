@@ -157,6 +157,98 @@ router.post('/pair', verifyUserToken, async (req, res) => {
     }
 });
 
+// POST /device/auto-pair - Automatically pair device after authentication (no code needed)
+router.post('/auto-pair', verifyUserToken, async (req, res) => {
+    try {
+        const { deviceType = 'iphone' } = req.body;
+        const db = getDbClient();
+        
+        // Check if device already exists for this user
+        let existingDevice;
+        if (db.type === 'prisma') {
+            const prisma = db.client;
+            existingDevice = await prisma.device.findFirst({
+                where: {
+                    userId: req.userId,
+                    deviceType
+                }
+            });
+        } else {
+            const sqliteDb = db.client;
+            existingDevice = await new Promise((resolve, reject) => {
+                sqliteDb.get(
+                    'SELECT * FROM devices WHERE user_id = ? AND device_type = ?',
+                    [req.userId, deviceType],
+                    (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    }
+                );
+            });
+        }
+        
+        // If device exists, return existing token
+        if (existingDevice) {
+            const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            return res.json({
+                deviceToken: existingDevice.deviceToken || existingDevice.device_token,
+                deviceId: existingDevice.id,
+                expiresAt
+            });
+        }
+        
+        // Create new device
+        const deviceId = uuidv4();
+        const deviceToken = jwt.sign(
+            { 
+                deviceId: deviceId,
+                userId: req.userId,
+                type: 'device'
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+        
+        if (db.type === 'prisma') {
+            await db.client.device.create({
+                data: {
+                    id: deviceId,
+                    userId: req.userId,
+                    deviceType,
+                    deviceToken
+                }
+            });
+        } else {
+            const sqliteDb = db.client;
+            await new Promise((resolve, reject) => {
+                sqliteDb.run(
+                    'INSERT INTO devices (id, user_id, device_type, device_token) VALUES (?, ?, ?, ?)',
+                    [deviceId, req.userId, deviceType, deviceToken],
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+        }
+        
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        
+        res.json({
+            deviceToken,
+            deviceId,
+            expiresAt
+        });
+        
+    } catch (error) {
+        console.error('Auto-pair error:', error);
+        res.status(500).json({
+            message: 'Auto-pairing failed',
+            code: 'AUTO_PAIR_ERROR'
+        });
+    }
+});
+
 // POST /device/generate-pairing-code - Generate a new pairing code
 router.post('/generate-pairing-code', verifyUserToken, async (req, res) => {
     try {

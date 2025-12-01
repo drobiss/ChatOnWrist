@@ -86,6 +86,22 @@ class AuthenticationService: ObservableObject {
                     print("⌚️ Token saved to keychain: \(saved)")
                     self.isAuthenticated = true
                     print("⌚️ Authentication state updated: isAuthenticated = \(self.isAuthenticated)")
+                    
+                    // Auto-pair Watch device after receiving token from iPhone
+                    Task {
+                        let pairResult = await self.backendService.autoPairDevice(userToken: token, deviceType: "watch")
+                        await MainActor.run {
+                            switch pairResult {
+                            case .success(let pairResponse):
+                                print("✅ Watch device auto-paired successfully")
+                                self.deviceToken = pairResponse.deviceToken
+                                self.keychain.save(key: "deviceToken", value: pairResponse.deviceToken)
+                            case .failure(let error):
+                                print("⚠️ Watch auto-pair failed (will use test endpoint): \(error.localizedDescription)")
+                                // Don't show error - app will work with test endpoint
+                            }
+                        }
+                    }
                 }
             }
             .store(in: &cancellables)
