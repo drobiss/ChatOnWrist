@@ -290,6 +290,10 @@ struct ErrorResponse: Codable {
     let code: String
 }
 
+struct EmptyBody: Codable {
+    // Empty body for GET requests
+}
+
 // MARK: - Error Types
 
 enum BackendError: Error, LocalizedError {
