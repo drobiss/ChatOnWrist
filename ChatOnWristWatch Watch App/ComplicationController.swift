@@ -71,28 +71,27 @@ class ComplicationController: NSObject, CLKComplicationDataSource {
     // MARK: - Template Creation
     
     private func createMicImageProvider() -> CLKImageProvider {
-        // Try to use custom ComplicationIcon first
-        if let customIcon = UIImage(named: "ComplicationIcon") {
-            let imageProvider = CLKImageProvider(onePieceImage: customIcon)
-            // Template images will be tinted automatically by the system
+        // Simple SF Symbol - always works perfectly
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold, scale: .medium)
+        guard let messageImage = UIImage(systemName: "message.fill", withConfiguration: config) else {
+            // Fallback to mic if message.fill not available
+            let micConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold, scale: .medium)
+            guard let micImage = UIImage(systemName: "mic.fill", withConfiguration: micConfig) else {
+                // Ultimate fallback - create a simple circle
+                let size = CGSize(width: 20, height: 20)
+                UIGraphicsBeginImageContextWithOptions(size, false, 0)
+                defer { UIGraphicsEndImageContext() }
+                let context = UIGraphicsGetCurrentContext()!
+                context.setFillColor(UIColor(red: 25/255, green: 149/255, blue: 254/255, alpha: 1.0).cgColor)
+                context.fillEllipse(in: CGRect(origin: .zero, size: size))
+                return CLKImageProvider(onePieceImage: UIGraphicsGetImageFromCurrentImageContext() ?? UIImage())
+            }
+            let imageProvider = CLKImageProvider(onePieceImage: micImage)
+            imageProvider.tintColor = UIColor(red: 25/255, green: 149/255, blue: 254/255, alpha: 1.0)
             return imageProvider
         }
         
-        // Fallback to SF Symbol if custom icon not found
-        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold, scale: .medium)
-        guard let micImage = UIImage(systemName: "mic.fill", withConfiguration: config) ?? 
-                             UIImage(systemName: "mic", withConfiguration: config) else {
-            // Ultimate fallback - create a simple circle
-            let size = CGSize(width: 20, height: 20)
-            UIGraphicsBeginImageContextWithOptions(size, false, 0)
-            defer { UIGraphicsEndImageContext() }
-            let context = UIGraphicsGetCurrentContext()!
-            context.setFillColor(UIColor(red: 25/255, green: 149/255, blue: 254/255, alpha: 1.0).cgColor)
-            context.fillEllipse(in: CGRect(origin: .zero, size: size))
-            return CLKImageProvider(onePieceImage: UIGraphicsGetImageFromCurrentImageContext() ?? UIImage())
-        }
-        
-        let imageProvider = CLKImageProvider(onePieceImage: micImage)
+        let imageProvider = CLKImageProvider(onePieceImage: messageImage)
         imageProvider.tintColor = UIColor(red: 25/255, green: 149/255, blue: 254/255, alpha: 1.0)
         return imageProvider
     }
@@ -163,19 +162,10 @@ struct ComplicationViewCircular: View {
             Circle()
                 .fill(complicationAccentColor.opacity(0.2))
             
-            // Use custom ComplicationIcon if available, otherwise SF Symbol
-            if let iconImage = UIImage(named: "ComplicationIcon") {
-                Image(uiImage: iconImage)
-                    .renderingMode(.template)
-                    .foregroundColor(complicationAccentColor)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 20, height: 20)
-            } else {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(complicationAccentColor)
-            }
+            // Simple SF Symbol - always works perfectly
+            Image(systemName: "message.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(complicationAccentColor)
         }
     }
 }
@@ -186,40 +176,21 @@ struct ComplicationViewCorner: View {
             Circle()
                 .fill(complicationAccentColor.opacity(0.2))
             
-            // Use custom ComplicationIcon if available, otherwise SF Symbol
-            if let iconImage = UIImage(named: "ComplicationIcon") {
-                Image(uiImage: iconImage)
-                    .renderingMode(.template)
-                    .foregroundColor(complicationAccentColor)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 16, height: 16)
-            } else {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(complicationAccentColor)
-            }
+            // Simple SF Symbol - always works perfectly
+            Image(systemName: "message.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(complicationAccentColor)
         }
     }
 }
 
 struct ComplicationViewRectangular: View {
     var body: some View {
-        // Use custom ComplicationIcon if available, otherwise SF Symbol
-        if let iconImage = UIImage(named: "ComplicationIcon") {
-            Image(uiImage: iconImage)
-                .renderingMode(.template)
-                .foregroundColor(complicationAccentColor)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(complicationAccentColor)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        // Simple SF Symbol - always works perfectly
+        Image(systemName: "message.fill")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(complicationAccentColor)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
