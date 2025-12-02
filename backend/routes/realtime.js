@@ -43,29 +43,56 @@ function createRealtimeServer(server) {
         // Authenticate connection - parse URL carefully
         let token;
         try {
+            // Parse the URL - req.url should be like "/realtime?token=..."
             const url = new URL(req.url, 'http://localhost');
             token = url.searchParams.get('token');
-            console.log('   Parsed token from URL params');
+            
+            // URL searchParams automatically decodes, but let's be explicit
+            if (token) {
+                token = decodeURIComponent(token);
+            }
+            
+            console.log('   ✅ Parsed token from URL params');
+            console.log('   Token preview:', token ? token.substring(0, 30) + '...' : 'null');
+            console.log('   Token length:', token ? token.length : 0);
         } catch (urlError) {
             console.error('❌ Failed to parse URL:', urlError.message);
+            console.error('   Raw URL:', req.url);
             // Fallback: try manual parsing
             const match = req.url.match(/[?&]token=([^&]+)/);
             if (match) {
                 token = decodeURIComponent(match[1]);
-                console.log('   Extracted token via regex fallback');
+                console.log('   ✅ Extracted token via regex fallback');
+                console.log('   Token preview:', token.substring(0, 30) + '...');
+                console.log('   Token length:', token.length);
             }
         }
+        
         if (!token) {
             console.error('❌ No token provided in WebSocket connection');
             console.error('   Request URL:', req.url);
+            console.error('   URL length:', req.url.length);
             ws.close(1008, 'Authentication required');
             return;
         }
-
-        console.log('🔑 Token received (first 20 chars):', token.substring(0, 20) + '...');
-        console.log('🔑 Token length:', token.length);
+        
+        // Validate token format (JWT should have 3 parts separated by dots)
+        const tokenParts = token.split('.');
+        if (tokenParts.length !== 3) {
+            console.error('❌ Invalid JWT format - expected 3 parts, got:', tokenParts.length);
+            console.error('   Token preview:', token.substring(0, 50));
+            ws.close(1008, 'Invalid token format');
+            return;
+        }
+        
+        console.log('🔑 Token format valid (3 parts)');
 
         try {
+            console.log('🔍 Attempting JWT verification...');
+            console.log('   Token starts with:', token.substring(0, 20));
+            console.log('   Token ends with:', token.substring(Math.max(0, token.length - 20)));
+            console.log('   Token contains dots:', (token.match(/\./g) || []).length);
+            
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             if (decoded.type !== 'device') {
                 throw new Error('Invalid token type');
@@ -75,9 +102,14 @@ function createRealtimeServer(server) {
         } catch (error) {
             console.error('❌ WebSocket authentication failed:', error.message);
             console.error('   Error type:', error.name);
-            console.error('   Token preview:', token.substring(0, 50) + '...');
+            console.error('   Token length:', token.length);
+            console.error('   Token first 50 chars:', token.substring(0, 50));
+            console.error('   Token last 50 chars:', token.substring(Math.max(0, token.length - 50)));
+            console.error('   Token parts count:', token.split('.').length);
             if (error.message.includes('malformed')) {
-                console.error('   ⚠️ Token appears to be malformed - check URL encoding');
+                console.error('   ⚠️ Token appears to be malformed');
+                console.error('   ⚠️ Expected format: header.payload.signature (3 parts separated by dots)');
+                console.error('   ⚠️ Check if token is being truncated or double-encoded');
             }
             ws.close(1008, 'Invalid token');
             return;
