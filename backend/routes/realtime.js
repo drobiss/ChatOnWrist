@@ -99,8 +99,11 @@ function createRealtimeServer(server) {
                     throw new Error('OPENAI_API_KEY not configured');
                 }
 
-                // Create OpenAI Realtime WebSocket connection
-                const openaiUrl = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17';
+                // OpenAI Realtime API endpoint
+                // Note: Model is specified in the URL query parameter
+                const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2024-12-17';
+                const openaiUrl = `wss://api.openai.com/v1/realtime?model=${model}`;
+                
                 openaiWS = new WebSocket(openaiUrl, {
                     headers: {
                         'Authorization': `Bearer ${openaiApiKey}`,
