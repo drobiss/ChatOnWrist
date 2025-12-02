@@ -183,15 +183,15 @@ function closeDatabase() {
         }
         
         dbInstance.close((err) => {
-            if (err) {
-                console.error('Error closing database:', err);
-                reject(err);
-            } else {
+                if (err) {
+                    console.error('Error closing database:', err);
+                    reject(err);
+                } else {
                 console.log('Database connection closed');
                 dbInstance = null;
                 isInitialized = false;
-                resolve();
-            }
+                    resolve();
+                }
         });
     });
 }
