@@ -51,7 +51,9 @@ class RealtimeWebSocketService: ObservableObject {
             .replacingOccurrences(of: "http://", with: "ws://")
             .replacingOccurrences(of: "https://", with: "wss://")
         
-        guard let url = URL(string: "\(wsURLString)/realtime?token=\(deviceToken)") else {
+        // URL-encode the token to handle special characters
+        guard let encodedToken = deviceToken.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "\(wsURLString)/realtime?token=\(encodedToken)") else {
             errorMessage = "Invalid WebSocket URL"
             return
         }
@@ -169,12 +171,24 @@ class RealtimeWebSocketService: ObservableObject {
                 self.receiveMessage()
                 
             case .failure(let error):
-                print("❌ WebSocket receive error: \(error.localizedDescription)")
+                let errorDesc = error.localizedDescription
+                print("❌ WebSocket receive error: \(errorDesc)")
+                
+                // Check for specific error types
+                var userMessage = "Connection error: \(errorDesc)"
+                if errorDesc.contains("offline") || errorDesc.contains("NECP") {
+                    #if targetEnvironment(simulator)
+                    userMessage = "Simulator network issue. Please test on a real Watch device."
+                    #else
+                    userMessage = "Network connection failed. Check WiFi or cellular data."
+                    #endif
+                }
+                
                 Task { @MainActor in
                     self.isConnected = false
                     self.isConnecting = false
-                    self.errorMessage = "Connection error: \(error.localizedDescription)"
-                    self.onError?(error.localizedDescription)
+                    self.errorMessage = userMessage
+                    self.onError?(userMessage)
                 }
             }
         }
@@ -211,6 +225,12 @@ class RealtimeWebSocketService: ObservableObject {
                 onConversationStarted?(convId)
             }
             print("✅ Conversation started")
+            
+        case "session.created", "session.updated":
+            // OpenAI session ready - connection is established
+            isConnected = true
+            isConnecting = false
+            print("✅ WebSocket session ready")
             
         case "audio_response":
             // Decode base64 audio data
@@ -258,7 +278,19 @@ class RealtimeWebSocketService: ObservableObject {
     // MARK: - Cleanup
     
     deinit {
-        disconnect()
+        // Capture WebSocket task reference before deinit completes
+        // We need to dispatch cleanup to main actor, but can't await in deinit
+        let task = webSocketTask
+        let session = urlSession
+        
+        // Dispatch cleanup to main actor (fire-and-forget)
+        Task { @MainActor in
+            // Cancel WebSocket task
+            task?.cancel(with: .goingAway, reason: nil)
+            
+            // Invalidate URL session
+            session?.invalidateAndCancel()
+        }
     }
 }
 

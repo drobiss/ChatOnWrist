@@ -14,17 +14,13 @@ struct WatchChatView: View {
     @EnvironmentObject var conversationStore: ConversationStore
     @EnvironmentObject var authService: AuthenticationService
     @EnvironmentObject var watchConnectivity: WatchConnectivityService
-    @StateObject private var speechService = SpeechService()
     @StateObject private var backendService = BackendService()
-    @StateObject private var dictationService = DictationService()
     @StateObject private var realtimeAudioService = RealtimeAudioService()
     @StateObject private var realtimeWebSocketService = RealtimeWebSocketService()
     
     @State private var isProcessing = false
-    @State private var isDictationActive = false
     @State private var hasProcessedInitialMessage = false
     @State private var useRealtimeVoice = true // Toggle between dictation and real-time voice (default: real-time)
-    @State private var errorMessage: String?
     @Environment(\.dismiss) private var dismiss
     
     private let initialMessage: String?
@@ -54,24 +50,13 @@ struct WatchChatView: View {
                             emptyState
                         }
                         
-                        // Status indicators - matching mobile app style
+                        // Status indicators - real-time voice only
                         if isProcessing {
                             HStack(spacing: 4) {
                                 ProgressView()
                                     .tint(WatchPalette.accent)
                                     .frame(width: 16, height: 16)
                                 Text("Thinking…")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(WatchPalette.textSecondary)
-                            }
-                            .padding(.vertical, 8)
-                        }
-                        if speechService.isSpeaking {
-                            HStack(spacing: 4) {
-                                ProgressView()
-                                    .tint(WatchPalette.accent)
-                                    .frame(width: 16, height: 16)
-                                Text("Speaking…")
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(WatchPalette.textSecondary)
                             }
@@ -93,7 +78,7 @@ struct WatchChatView: View {
                                 ProgressView()
                                     .tint(WatchPalette.accent)
                                     .frame(width: 16, height: 16)
-                                Text("Playing…")
+                                Text("AI Speaking…")
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(WatchPalette.textSecondary)
                             }
@@ -148,7 +133,10 @@ struct WatchChatView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(action: {
-                    speechService.stopSpeaking()
+                    // Stop real-time voice
+                    realtimeAudioService.stopRecording()
+                    realtimeAudioService.stopPlayback()
+                    realtimeWebSocketService.disconnect()
                     dismiss()
                 }) {
                     Image(systemName: "xmark")
@@ -188,19 +176,10 @@ struct WatchChatView: View {
                 }
             }
             
-            // Process initial message if provided (from main screen dictation)
-            if !hasProcessedInitialMessage,
-               let pending = initialMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !pending.isEmpty {
-                hasProcessedInitialMessage = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    sendMessage(text: pending)
-                }
-            }
+            // Note: Initial messages are ignored - use real-time voice chat instead
+            // Real-time voice is the primary interface
         }
         .onDisappear {
-            // Stop speech when view is dismissed
-            speechService.stopSpeaking()
             // Disconnect real-time voice chat
             realtimeWebSocketService.disconnect()
             realtimeAudioService.stopRecording()
@@ -232,32 +211,21 @@ struct WatchChatView: View {
     
     private var micButtonOverlay: some View {
         Button(action: {
-            if useRealtimeVoice {
-                toggleRealtimeVoice()
-            } else {
-                presentDictation()
-            }
+            print("🎤 Mic button tapped - toggling real-time voice")
+            toggleRealtimeVoice()
         }) {
             Circle()
                 .fill(WatchPalette.accent)
                 .frame(width: 40, height: 40)
                 .overlay(
-                    Group {
-                        if useRealtimeVoice {
-                            Image(systemName: realtimeAudioService.isRecording ? "waveform" : "mic.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                        } else {
-                            Image(systemName: isDictationActive ? "waveform" : "mic.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                    }
+                    Image(systemName: realtimeAudioService.isRecording ? "waveform" : "mic.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
                 )
         }
-        .disabled(isProcessing || speechService.isSpeaking || isDictationActive || realtimeAudioService.isRecording)
+        .disabled(isProcessing || realtimeAudioService.isRecording)
         .buttonStyle(.plain)
-        .opacity((isProcessing || speechService.isSpeaking) ? 0.5 : 1.0)
+        .opacity(isProcessing ? 0.5 : 1.0)
         .padding(.trailing, 4)
         .padding(.bottom, 18)
     }
@@ -266,6 +234,9 @@ struct WatchChatView: View {
     // MARK: - Real-time Voice Chat Setup
     
     private func setupRealtimeVoiceChat() {
+        // Capture references for use in closures
+        let store = conversationStore
+        
         // Setup audio service callback
         realtimeAudioService.onAudioChunk = { [weak realtimeWebSocketService] audioData in
             realtimeWebSocketService?.sendAudioChunk(audioData)
@@ -276,12 +247,12 @@ struct WatchChatView: View {
             realtimeAudioService?.playAudioChunk(audioData)
         }
         
-        realtimeWebSocketService.onTranscriptComplete = { [weak self] text in
-            guard let self = self else { return }
-            // Add transcript as a message
-            if let conversation = self.conversationStore.currentConversation, !text.isEmpty {
-                let message = Message(content: text, isFromUser: false)
-                self.conversationStore.addMessage(message, to: conversation)
+        realtimeWebSocketService.onTranscriptComplete = { text in
+            Task { @MainActor in
+                if let conversation = store.currentConversation, !text.isEmpty {
+                    let message = Message(content: text, isFromUser: false)
+                    store.addMessage(message, to: conversation)
+                }
             }
         }
         
@@ -289,11 +260,8 @@ struct WatchChatView: View {
             print("✅ Real-time response complete")
         }
         
-        realtimeWebSocketService.onError = { [weak self] error in
+        realtimeWebSocketService.onError = { error in
             print("❌ Real-time voice error: \(error)")
-            Task { @MainActor in
-                self?.errorMessage = error
-            }
         }
         
         realtimeWebSocketService.onConversationStarted = { conversationId in
@@ -308,6 +276,7 @@ struct WatchChatView: View {
     // MARK: - Real-time Voice Chat Control
     
     private func toggleRealtimeVoice() {
+        print("🎤 toggleRealtimeVoice called, isRecording: \(realtimeAudioService.isRecording)")
         if realtimeAudioService.isRecording {
             stopRealtimeVoice()
         } else {
@@ -316,16 +285,60 @@ struct WatchChatView: View {
     }
     
     private func startRealtimeVoice() {
+        print("🎤 startRealtimeVoice called")
         guard let deviceToken = authService.deviceToken, !deviceToken.isEmpty else {
-            print("⚠️ Cannot start real-time voice: device not paired")
-            errorMessage = "Please sign in and pair your device first"
+            print("❌ Cannot start real-time voice: device not paired")
+            print("   Please sign in and pair your device first")
             return
         }
         
+        print("✅ Device token found: \(deviceToken.prefix(20))...")
+        
         guard let conversation = conversationStore.currentConversation else {
-            print("⚠️ No conversation available")
+            print("⚠️ No conversation available, creating new one")
+            _ = conversationStore.createNewConversation()
+            guard let newConversation = conversationStore.currentConversation else {
+                print("❌ Failed to create conversation")
+                return
+            }
+            // Use the new conversation
+            let history: [[String: String]] = []
+            
+            print("🔌 Connecting WebSocket for conversation: \(newConversation.id.uuidString)")
+            
+            // Set up callback for when WebSocket connects
+            let originalOnConnected = realtimeWebSocketService.onConversationStarted
+            realtimeWebSocketService.onConversationStarted = { convId in
+                originalOnConnected?(convId)
+                print("✅ WebSocket connected, starting recording...")
+                
+                // Setup playback
+                realtimeAudioService.setupPlayback()
+                
+                // Start recording
+                realtimeAudioService.startRecording()
+                
+                #if os(watchOS)
+                WKInterfaceDevice.current().play(.start)
+                #endif
+            }
+            
+            // Set up error handler
+            realtimeWebSocketService.onError = { error in
+                print("❌ WebSocket error: \(error)")
+                // Don't start recording on error
+            }
+            
+            // Connect WebSocket
+            realtimeWebSocketService.connect(
+                deviceToken: deviceToken,
+                conversationId: newConversation.id.uuidString,
+                conversationHistory: history
+            )
             return
         }
+        
+        print("✅ Conversation found: \(conversation.id.uuidString)")
         
         // Prepare conversation history
         let history = conversation.messages.map { msg in
@@ -335,30 +348,37 @@ struct WatchChatView: View {
             ]
         }
         
+        print("🔌 Connecting WebSocket with \(history.count) history messages")
+        
+        // Set up callback for when WebSocket connects
+        let originalOnConnected = realtimeWebSocketService.onConversationStarted
+        realtimeWebSocketService.onConversationStarted = { convId in
+            originalOnConnected?(convId)
+            print("✅ WebSocket connected, starting recording...")
+            
+            // Setup playback
+            realtimeAudioService.setupPlayback()
+            
+            // Start recording
+            realtimeAudioService.startRecording()
+            
+            #if os(watchOS)
+            WKInterfaceDevice.current().play(.start)
+            #endif
+        }
+        
+        // Set up error handler
+        realtimeWebSocketService.onError = { error in
+            print("❌ WebSocket error: \(error)")
+            // Don't start recording on error
+        }
+        
         // Connect WebSocket
         realtimeWebSocketService.connect(
             deviceToken: deviceToken,
             conversationId: conversation.id.uuidString,
             conversationHistory: history
         )
-        
-        // Wait for connection, then start recording
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self, self.realtimeWebSocketService.isConnected else {
-                print("⚠️ WebSocket not connected, cannot start recording")
-                return
-            }
-            
-            // Setup playback
-            self.realtimeAudioService.setupPlayback()
-            
-            // Start recording
-            self.realtimeAudioService.startRecording()
-            
-            #if os(watchOS)
-            WKInterfaceDevice.current().play(.start)
-            #endif
-        }
     }
     
     private func stopRealtimeVoice() {
@@ -371,39 +391,14 @@ struct WatchChatView: View {
         
         // Disconnect after a delay to allow final audio to be sent
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.realtimeWebSocketService.disconnect()
-            self.realtimeAudioService.stopPlayback()
+            realtimeWebSocketService.disconnect()
+            realtimeAudioService.stopPlayback()
         }
     }
     
     // MARK: - Actions
     
-    private func presentDictation() {
-        guard !isProcessing, !speechService.isSpeaking, !isDictationActive else { return }
-        
-        isDictationActive = true
-        
-        #if os(watchOS)
-        WKInterfaceDevice.current().play(.start)
-        #endif
-        
-        dictationService.requestDictation(initialText: nil) { result in
-            #if os(watchOS)
-            WKInterfaceDevice.current().play(.stop)
-            #endif
-            
-            isDictationActive = false
-            
-            guard let text = result?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
-                return
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                sendMessage(text: text)
-            }
-        }
-    }
-    
+    // Note: sendMessage is kept for initial messages, but real-time voice is the primary interface
     private func sendMessage(text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -466,7 +461,7 @@ struct WatchChatView: View {
                         conversationStore.updateRemoteId(response.conversationId, for: currentConversation.id)
                     }
                     
-                    speechService.speak(response.response)
+                    // Note: No TTS - responses come via real-time voice chat
                     
                 case .failure(let error):
                     let errorMessage = Message(content: "Error: \(error.localizedDescription)", isFromUser: false)

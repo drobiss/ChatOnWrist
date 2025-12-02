@@ -21,23 +21,49 @@ const activeConnections = new Map();
 function createRealtimeServer(server) {
     const wss = new WebSocketServer({ 
         server,
-        path: '/realtime'
+        path: '/realtime',
+        perMessageDeflate: false // Disable compression for better compatibility
+    });
+
+    // Log upgrade attempts
+    server.on('upgrade', (request, socket, head) => {
+        console.log('🔄 WebSocket upgrade request:', request.url);
+        console.log('   Headers:', JSON.stringify(request.headers));
     });
 
     wss.on('connection', (ws, req) => {
         console.log('🔌 New WebSocket connection from:', req.socket.remoteAddress);
+        console.log('   Full URL:', req.url);
+        console.log('   URL length:', req.url.length);
         
         let watchId = null;
         let openaiWS = null;
         let conversationId = null;
         
-        // Authenticate connection
-        const token = new URL(req.url, 'http://localhost').searchParams.get('token');
+        // Authenticate connection - parse URL carefully
+        let token;
+        try {
+            const url = new URL(req.url, 'http://localhost');
+            token = url.searchParams.get('token');
+            console.log('   Parsed token from URL params');
+        } catch (urlError) {
+            console.error('❌ Failed to parse URL:', urlError.message);
+            // Fallback: try manual parsing
+            const match = req.url.match(/[?&]token=([^&]+)/);
+            if (match) {
+                token = decodeURIComponent(match[1]);
+                console.log('   Extracted token via regex fallback');
+            }
+        }
         if (!token) {
             console.error('❌ No token provided in WebSocket connection');
+            console.error('   Request URL:', req.url);
             ws.close(1008, 'Authentication required');
             return;
         }
+
+        console.log('🔑 Token received (first 20 chars):', token.substring(0, 20) + '...');
+        console.log('🔑 Token length:', token.length);
 
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -48,6 +74,11 @@ function createRealtimeServer(server) {
             console.log('✅ Authenticated WebSocket connection for device:', watchId);
         } catch (error) {
             console.error('❌ WebSocket authentication failed:', error.message);
+            console.error('   Error type:', error.name);
+            console.error('   Token preview:', token.substring(0, 50) + '...');
+            if (error.message.includes('malformed')) {
+                console.error('   ⚠️ Token appears to be malformed - check URL encoding');
+            }
             ws.close(1008, 'Invalid token');
             return;
         }

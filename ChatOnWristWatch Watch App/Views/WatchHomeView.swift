@@ -15,14 +15,11 @@ struct WatchHomeView: View {
     @EnvironmentObject var authService: AuthenticationService
     @EnvironmentObject var watchConnectivity: WatchConnectivityService
     
-    @StateObject private var dictationService = DictationService()
-    
     @Binding var shouldStartDictation: Bool
     
     @State private var showHistorySheet = false
     @State private var showVoiceSettingsSheet = false
     @State private var showMenuSheet = false
-    @State private var pendingDictationText: String?
     @State private var navigateToChat = false
     @State private var conversationToNavigate: Conversation?
     @State private var pulseScale: CGFloat = 1.0
@@ -63,9 +60,9 @@ struct WatchHomeView: View {
                                 conversationToNavigate = nil
                             }
                     } else {
-                WatchChatView(initialMessage: pendingDictationText)
-                    .environmentObject(conversationStore)
-                    .environmentObject(authService)
+                        WatchChatView()
+                            .environmentObject(conversationStore)
+                            .environmentObject(authService)
                             .environmentObject(watchConnectivity)
                     }
                 }
@@ -89,10 +86,10 @@ struct WatchHomeView: View {
             }
             .onChange(of: shouldStartDictation) { oldValue, newValue in
                 if newValue {
-                    // Reset flag and start dictation
+                    // Reset flag and navigate to chat (real-time voice)
                     shouldStartDictation = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        startDictation()
+                        startRealtimeVoiceChat()
                     }
                 }
             }
@@ -113,7 +110,7 @@ struct WatchHomeView: View {
     
     private var heroMicButton: some View {
         VStack(spacing: 18) {
-            Button(action: startDictation) {
+            Button(action: startRealtimeVoiceChat) {
                 ZStack {
                     // Outer pulse ring - smooth Apple-style pulse
                     Circle()
@@ -144,7 +141,7 @@ struct WatchHomeView: View {
                 }
             }
             .buttonStyle(HeroButtonStyle())
-            .accessibilityLabel("Start dictation")
+            .accessibilityLabel("Start real-time voice chat")
             
             Text("Tap to speak")
                 .font(.system(size: 13, weight: .medium))
@@ -280,7 +277,7 @@ struct WatchHomeView: View {
     
     // MARK: - Actions
     
-    private func startDictation() {
+    private func startRealtimeVoiceChat() {
         #if os(watchOS)
         WKInterfaceDevice.current().play(.click)
         #endif
@@ -288,15 +285,8 @@ struct WatchHomeView: View {
         // Always create a new conversation when starting from main screen
         _ = conversationStore.createNewConversation()
         
-        dictationService.requestDictation(initialText: nil) { text in
-            guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !trimmed.isEmpty else {
-                return
-            }
-            
-            pendingDictationText = trimmed
-            navigateToChat = true
-        }
+        // Navigate directly to chat view - user will use real-time voice there
+        navigateToChat = true
     }
 }
 

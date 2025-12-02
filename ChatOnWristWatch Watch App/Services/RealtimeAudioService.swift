@@ -287,8 +287,22 @@ class RealtimeAudioService: NSObject, ObservableObject {
     // MARK: - Cleanup
     
     deinit {
-        stopRecording()
-        stopPlayback()
+        // Capture engine references before deinit completes
+        // We need to dispatch cleanup to main actor, but can't await in deinit
+        let recordingEngine = audioEngine
+        let playbackEngine = playbackEngine
+        let playbackNode = playbackPlayerNode
+        
+        // Dispatch cleanup to main actor (fire-and-forget)
+        Task { @MainActor in
+            // Stop recording engine
+            recordingEngine?.stop()
+            recordingEngine?.inputNode.removeTap(onBus: 0)
+            
+            // Stop playback engine
+            playbackNode?.stop()
+            playbackEngine?.stop()
+        }
     }
 }
 
