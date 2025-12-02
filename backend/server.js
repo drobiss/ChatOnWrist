@@ -390,6 +390,17 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🔗 API Base URL: http://0.0.0.0:${PORT}`);
 });
 
+// Initialize WebSocket server for real-time voice chat
+const { createRealtimeServer } = require('./routes/realtime');
+let wss = null;
+try {
+    wss = createRealtimeServer(server);
+    console.log('✅ Realtime WebSocket server initialized');
+} catch (error) {
+    console.error('❌ Failed to initialize WebSocket server:', error);
+    // Don't exit - HTTP server can still work without WebSocket
+}
+
 // Handle server errors
 server.on('error', (err) => {
     console.error('Server error:', err);
