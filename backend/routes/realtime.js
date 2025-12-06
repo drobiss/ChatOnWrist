@@ -32,9 +32,12 @@ function createRealtimeServer(server) {
     });
 
     wss.on('connection', (ws, req) => {
-        console.log('🔌 New WebSocket connection from:', req.socket.remoteAddress);
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('🔌 NEW WEBSOCKET CONNECTION');
+        console.log('   From:', req.socket.remoteAddress);
         console.log('   Full URL:', req.url);
         console.log('   URL length:', req.url.length);
+        console.log('═══════════════════════════════════════════════════════');
         
         let watchId = null;
         let openaiWS = null;
