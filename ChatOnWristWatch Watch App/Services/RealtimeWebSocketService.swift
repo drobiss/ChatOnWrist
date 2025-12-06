@@ -62,11 +62,17 @@ class RealtimeWebSocketService: ObservableObject {
         errorMessage = nil
         
         // Create URLSession for WebSocket
-        let config = URLSessionConfiguration.default
+        // Use ephemeral configuration to avoid caching issues
+        let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 300
+        config.waitsForConnectivity = true
+        config.allowsCellularAccess = true
+        config.allowsConstrainedNetworkAccess = true
+        config.allowsExpensiveNetworkAccess = true
         
-        urlSession = URLSession(configuration: config)
+        // Set delegate for connection events
+        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         webSocketTask = urlSession?.webSocketTask(with: url)
         
         guard let task = webSocketTask else {
