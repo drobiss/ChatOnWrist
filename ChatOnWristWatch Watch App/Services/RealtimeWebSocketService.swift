@@ -71,8 +71,7 @@ class RealtimeWebSocketService: ObservableObject {
         config.allowsConstrainedNetworkAccess = true
         config.allowsExpensiveNetworkAccess = true
         
-        // Set delegate for connection events
-        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        urlSession = URLSession(configuration: config)
         webSocketTask = urlSession?.webSocketTask(with: url)
         
         guard let task = webSocketTask else {
@@ -81,11 +80,11 @@ class RealtimeWebSocketService: ObservableObject {
             return
         }
         
-        // Set up message handler
-        receiveMessage()
-        
         // Start connection
         task.resume()
+
+        // Set up message handler
+        receiveMessage()
         
         // Wait for connection, then send start_conversation message
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -299,5 +298,4 @@ class RealtimeWebSocketService: ObservableObject {
         }
     }
 }
-
 

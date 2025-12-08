@@ -21,6 +21,7 @@ struct WatchChatView: View {
     @State private var isProcessing = false
     @State private var hasProcessedInitialMessage = false
     @State private var useRealtimeVoice = true // Toggle between dictation and real-time voice (default: real-time)
+    @State private var shouldDisconnectAfterResponse = false
     @Environment(\.dismiss) private var dismiss
     
     private let initialMessage: String?
@@ -258,10 +259,15 @@ struct WatchChatView: View {
         
         realtimeWebSocketService.onResponseComplete = {
             print("✅ Real-time response complete")
+            finalizeRealtimeSessionIfNeeded()
         }
         
         realtimeWebSocketService.onError = { error in
             print("❌ Real-time voice error: \(error)")
+            shouldDisconnectAfterResponse = false
+            realtimeAudioService.stopRecording()
+            realtimeAudioService.stopPlayback()
+            realtimeWebSocketService.disconnect()
         }
         
         realtimeWebSocketService.onConversationStarted = { conversationId in
@@ -270,6 +276,7 @@ struct WatchChatView: View {
         
         realtimeWebSocketService.onConversationEnded = {
             print("🔚 Real-time conversation ended")
+            finalizeRealtimeSessionIfNeeded()
         }
     }
     
@@ -286,6 +293,7 @@ struct WatchChatView: View {
     
     private func startRealtimeVoice() {
         print("🎤 startRealtimeVoice called")
+        shouldDisconnectAfterResponse = false
         guard let deviceToken = authService.deviceToken, !deviceToken.isEmpty else {
             print("❌ Cannot start real-time voice: device not paired")
             print("   Please sign in and pair your device first")
@@ -382,6 +390,7 @@ struct WatchChatView: View {
     }
     
     private func stopRealtimeVoice() {
+        shouldDisconnectAfterResponse = true
         realtimeAudioService.stopRecording()
         realtimeWebSocketService.endConversation()
         
@@ -389,8 +398,20 @@ struct WatchChatView: View {
         WKInterfaceDevice.current().play(.stop)
         #endif
         
-        // Disconnect after a delay to allow final audio to be sent
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // Fallback timeout in case we never get a completion signal
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
+            if shouldDisconnectAfterResponse {
+                print("⚠️ No response received in time, forcing disconnect")
+                finalizeRealtimeSessionIfNeeded()
+            }
+        }
+    }
+    
+    private func finalizeRealtimeSessionIfNeeded() {
+        guard shouldDisconnectAfterResponse else { return }
+        shouldDisconnectAfterResponse = false
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             realtimeWebSocketService.disconnect()
             realtimeAudioService.stopPlayback()
         }

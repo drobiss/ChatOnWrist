@@ -35,17 +35,23 @@ class RealtimeAudioService: NSObject, ObservableObject {
     
     override init() {
         super.init()
-        setupAudioSession()
+        configureRealtimeAudioSession()
     }
     
     // MARK: - Audio Session Setup
     
-    private func setupAudioSession() {
+    private func configureRealtimeAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: [])
-            try session.setActive(true)
-            print("✅ Audio session configured for recording")
+            try session.setCategory(
+                .playAndRecord,
+                mode: .voiceChat,
+                options: [
+                    .allowBluetooth
+                ]
+            )
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            print("✅ Audio session configured for real-time voice")
         } catch {
             print("❌ Failed to configure audio session: \(error.localizedDescription)")
             errorMessage = "Failed to configure audio: \(error.localizedDescription)"
@@ -59,6 +65,8 @@ class RealtimeAudioService: NSObject, ObservableObject {
             print("⚠️ Already recording")
             return
         }
+        
+        configureRealtimeAudioSession()
         
         // Reset state
         audioBuffer.removeAll()
@@ -181,11 +189,9 @@ class RealtimeAudioService: NSObject, ObservableObject {
             return
         }
         
+        configureRealtimeAudioSession()
+        
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [])
-            try session.setActive(true)
-            
             playbackEngine = AVAudioEngine()
             guard let engine = playbackEngine else {
                 errorMessage = "Failed to create playback engine"
@@ -305,4 +311,3 @@ class RealtimeAudioService: NSObject, ObservableObject {
         }
     }
 }
-
