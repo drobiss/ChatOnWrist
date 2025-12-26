@@ -56,3 +56,5 @@ https://your-app.railway.app/admin/dashboard?key=YOUR_ADMIN_KEY
 - 🔒 **Better Security**: Proper connection pooling
 - 📈 **Scalable**: Can handle growth
 
+
+

@@ -129,3 +129,5 @@ When Prisma Studio opens, you'll see a list of your database tables:
 
 That's it! Prisma Studio is just a visual way to see and edit your database.
 
+
+

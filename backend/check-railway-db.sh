@@ -40,3 +40,5 @@ echo ""
 echo "💡 To download database and view in Prisma Studio, run:"
 echo "   ./download-railway-db.sh"
 
+
+

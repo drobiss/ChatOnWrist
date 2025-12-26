@@ -43,6 +43,9 @@ class RealtimeWebSocketService: ObservableObject {
             return
         }
         
+        // Clear any previous errors
+        errorMessage = nil
+        
         self.deviceToken = deviceToken
         self.conversationId = conversationId
         
@@ -62,14 +65,29 @@ class RealtimeWebSocketService: ObservableObject {
         errorMessage = nil
         
         // Create URLSession for WebSocket
-        // Use ephemeral configuration to avoid caching issues
+        // Use ephemeral configuration on watchOS to avoid network policy restrictions
+        // Ephemeral sessions don't share cookies/cache and have fewer restrictions
+        #if os(watchOS)
         let config = URLSessionConfiguration.ephemeral
+        #else
+        let config = URLSessionConfiguration.default
+        #endif
+        
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 300
         config.waitsForConnectivity = true
         config.allowsCellularAccess = true
         config.allowsConstrainedNetworkAccess = true
         config.allowsExpensiveNetworkAccess = true
+        
+        // On watchOS, configure for direct network access
+        // watchOS WebSocket connections require direct WiFi/cellular, not iPhone proxy
+        #if os(watchOS)
+        config.networkServiceType = .default
+        // multipathServiceType is not available on watchOS
+        // Try to force direct connection, not through iPhone proxy
+        config.waitsForConnectivity = false // Don't wait - fail fast if no direct connection
+        #endif
         
         urlSession = URLSession(configuration: config)
         webSocketTask = urlSession?.webSocketTask(with: url)
@@ -80,6 +98,13 @@ class RealtimeWebSocketService: ObservableObject {
             return
         }
         
+        #if os(watchOS)
+        print("⌚️ WatchOS: Using ephemeral URLSession configuration to avoid NECP restrictions")
+        print("⌚️ WatchOS: Network service type: \(config.networkServiceType.rawValue)")
+        print("⌚️ WatchOS: IMPORTANT - Watch needs direct WiFi/cellular connection (not iPhone proxy)")
+        print("⌚️ WatchOS: Check Watch Settings > Wi-Fi to ensure Watch has network access")
+        #endif
+        
         // Start connection
         task.resume()
 
@@ -88,7 +113,21 @@ class RealtimeWebSocketService: ObservableObject {
         
         // Wait for connection, then send start_conversation message
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.sendStartConversation(conversationId: conversationId, conversationHistory: conversationHistory)
+            guard let self = self else { return }
+            // Check if connected before sending
+            if self.isConnected {
+                self.sendStartConversation(conversationId: conversationId, conversationHistory: conversationHistory)
+            } else {
+                print("⚠️ WebSocket not connected yet, will retry sending start_conversation")
+                // Retry after another delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                    guard let self = self, self.isConnected else {
+                        print("❌ WebSocket still not connected after retry")
+                        return
+                    }
+                    self.sendStartConversation(conversationId: conversationId, conversationHistory: conversationHistory)
+                }
+            }
         }
         
         print("🔌 Connecting to WebSocket: \(url.absoluteString)")
@@ -177,16 +216,23 @@ class RealtimeWebSocketService: ObservableObject {
                 
             case .failure(let error):
                 let errorDesc = error.localizedDescription
+                let nsError = error as NSError
                 print("❌ WebSocket receive error: \(errorDesc)")
+                print("❌ Error domain: \(nsError.domain), code: \(nsError.code)")
+                print("❌ Error userInfo: \(nsError.userInfo)")
                 
                 // Check for specific error types
                 var userMessage = "Connection error: \(errorDesc)"
-                if errorDesc.contains("offline") || errorDesc.contains("NECP") {
+                if errorDesc.contains("offline") || errorDesc.contains("NECP") || errorDesc.contains("Path was denied") || errorDesc.contains("ipsec") {
                     #if targetEnvironment(simulator)
                     userMessage = "Simulator network issue. Please test on a real Watch device."
                     #else
-                    userMessage = "Network connection failed. Check WiFi or cellular data."
+                    userMessage = "Watch network blocked. Try:\n1. Ensure Watch has WiFi/cellular\n2. Check Watch Settings > Wi-Fi\n3. Restart Watch app\n4. If persists, restart Watch"
                     #endif
+                } else if nsError.code == -1009 || errorDesc.contains("offline") {
+                    userMessage = "No internet connection. Ensure Watch has WiFi or cellular enabled."
+                } else if nsError.code == -1001 {
+                    userMessage = "Connection timeout. Check Watch network connection."
                 }
                 
                 Task { @MainActor in
@@ -225,6 +271,7 @@ class RealtimeWebSocketService: ObservableObject {
         case "conversation_started":
             isConnected = true
             isConnecting = false
+            errorMessage = nil
             if let convId = json["conversationId"] as? String {
                 conversationId = convId
                 onConversationStarted?(convId)
@@ -235,6 +282,7 @@ class RealtimeWebSocketService: ObservableObject {
             // OpenAI session ready - connection is established
             isConnected = true
             isConnecting = false
+            errorMessage = nil
             print("✅ WebSocket session ready")
             
         case "audio_response":
@@ -298,4 +346,3 @@ class RealtimeWebSocketService: ObservableObject {
         }
     }
 }
-

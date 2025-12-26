@@ -49,3 +49,5 @@ echo ""
 echo "=== Recent Messages ==="
 sqlite3 "$DB_PATH" -header -column "SELECT m.id, m.content, m.is_from_user, c.title as conversation, m.created_at FROM messages m LEFT JOIN conversations c ON m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 10;"
 
+
+

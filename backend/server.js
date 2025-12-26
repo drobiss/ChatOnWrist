@@ -366,6 +366,10 @@ app.use('/auth', authRoutes);
 app.use('/device', deviceRoutes);
 app.use('/chat', chatRoutes);
 
+// HTTP streaming routes for watchOS (WebSocket alternative)
+const realtimeHttpRoutes = require('./routes/realtime-http');
+app.use('/realtime', realtimeHttpRoutes);
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Error:', err);

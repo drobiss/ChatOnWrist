@@ -44,3 +44,5 @@ After linking/setting, redeploy and check logs:
 - Should see: `📊 DATABASE_URL: postgresql://...`
 - Should see: `📊 Using PostgreSQL with Prisma...`
 
+
+

@@ -1,99 +1,102 @@
 const { sendError, ErrorCodes } = require('../utils/errors');
 
 /**
- * Validate Apple ID token in request body
+ * Middleware to validate Apple ID token in request body
  */
-const validateAppleIDToken = (req, res, next) => {
+function validateAppleIDToken(req, res, next) {
     const { appleIDToken } = req.body;
     
-    if (!appleIDToken || typeof appleIDToken !== 'string' || appleIDToken.trim().length === 0) {
-        return sendError(res, 400, 'Apple ID token is required', ErrorCodes.VALIDATION_ERROR, 'MISSING_APPLE_ID_TOKEN');
+    if (!appleIDToken) {
+        return sendError(res, 400, 'Apple ID token is required', ErrorCodes.MISSING_APPLE_ID_TOKEN);
+    }
+    
+    if (typeof appleIDToken !== 'string') {
+        return sendError(res, 400, 'Apple ID token must be a string', ErrorCodes.INVALID_APPLE_ID_TOKEN);
+    }
+    
+    if (appleIDToken.trim().length === 0) {
+        return sendError(res, 400, 'Apple ID token cannot be empty', ErrorCodes.INVALID_APPLE_ID_TOKEN);
     }
     
     // Basic JWT format validation (starts with "eyJ")
     if (!appleIDToken.startsWith('eyJ')) {
-        return sendError(res, 400, 'Invalid Apple ID token format', ErrorCodes.VALIDATION_ERROR, 'INVALID_TOKEN_FORMAT');
+        return sendError(res, 400, 'Invalid Apple ID token format', ErrorCodes.INVALID_APPLE_ID_TOKEN);
     }
     
     next();
-};
+}
 
 /**
- * Validate message in request body
+ * Middleware to validate message in request body
  */
-const validateMessage = (req, res, next) => {
+function validateMessage(req, res, next) {
     const { message } = req.body;
     
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
-        return sendError(res, 400, 'Message content is required', ErrorCodes.VALIDATION_ERROR, 'EMPTY_MESSAGE');
+    if (!message) {
+        return sendError(res, 400, 'Message is required', ErrorCodes.MISSING_INPUT);
     }
     
-    if (message.trim().length > 5000) {
-        return sendError(res, 400, 'Message exceeds maximum length of 5000 characters', ErrorCodes.VALIDATION_ERROR, 'MESSAGE_TOO_LONG');
+    if (typeof message !== 'string') {
+        return sendError(res, 400, 'Message must be a string', ErrorCodes.INVALID_MESSAGE_FORMAT);
+    }
+    
+    const trimmed = message.trim();
+    
+    if (trimmed.length === 0) {
+        return sendError(res, 400, 'Message cannot be empty', ErrorCodes.EMPTY_MESSAGE);
+    }
+    
+    if (trimmed.length > 5000) {
+        return sendError(res, 400, 'Message exceeds maximum length of 5000 characters', ErrorCodes.MESSAGE_TOO_LONG);
     }
     
     next();
-};
+}
 
 /**
- * Validate conversation array in request body
+ * Middleware to validate conversation array in request body
  */
-const validateConversation = (req, res, next) => {
+function validateConversation(req, res, next) {
     const { conversation } = req.body;
     
-    // Conversation is optional, but if provided, it must be an array
-    if (conversation !== undefined && !Array.isArray(conversation)) {
-        return sendError(res, 400, 'Conversation must be an array', ErrorCodes.VALIDATION_ERROR, 'INVALID_CONVERSATION_FORMAT');
-    }
-    
-    // Validate conversation items if array is provided
-    if (Array.isArray(conversation)) {
+    // Conversation is optional, but if provided, it must be valid
+    if (conversation !== undefined) {
+        if (!Array.isArray(conversation)) {
+            return sendError(res, 400, 'Conversation must be an array', ErrorCodes.INVALID_CONVERSATION_FORMAT);
+        }
+        
+        // Validate each message in the conversation
         for (let i = 0; i < conversation.length; i++) {
             const msg = conversation[i];
+            
             if (!msg || typeof msg !== 'object') {
-                return sendError(res, 400, `Invalid conversation message at index ${i}`, ErrorCodes.VALIDATION_ERROR, 'INVALID_MESSAGE_FORMAT');
+                return sendError(res, 400, `Conversation message at index ${i} must be an object`, ErrorCodes.INVALID_MESSAGE_FORMAT);
             }
-            if (typeof msg.role !== 'string' || (msg.role !== 'user' && msg.role !== 'assistant')) {
-                return sendError(res, 400, `Invalid message role at index ${i}. Must be 'user' or 'assistant'`, ErrorCodes.VALIDATION_ERROR, 'INVALID_MESSAGE_ROLE');
+            
+            if (!msg.role || typeof msg.role !== 'string') {
+                return sendError(res, 400, `Conversation message at index ${i} must have a valid role`, ErrorCodes.INVALID_MESSAGE_ROLE);
             }
-            if (typeof msg.content !== 'string') {
-                return sendError(res, 400, `Invalid message content at index ${i}`, ErrorCodes.VALIDATION_ERROR, 'INVALID_MESSAGE_CONTENT');
+            
+            if (msg.role !== 'user' && msg.role !== 'assistant') {
+                return sendError(res, 400, `Conversation message at index ${i} must have role 'user' or 'assistant'`, ErrorCodes.INVALID_MESSAGE_ROLE);
             }
+            
+            if (!msg.content || typeof msg.content !== 'string') {
+                return sendError(res, 400, `Conversation message at index ${i} must have valid content`, ErrorCodes.INVALID_MESSAGE_CONTENT);
+            }
+            
             if (msg.content.trim().length === 0) {
-                return sendError(res, 400, `Empty message content at index ${i}`, ErrorCodes.VALIDATION_ERROR, 'EMPTY_MESSAGE_CONTENT');
-            }
-            if (msg.content.length > 5000) {
-                return sendError(res, 400, `Message content at index ${i} exceeds maximum length`, ErrorCodes.VALIDATION_ERROR, 'MESSAGE_TOO_LONG');
+                return sendError(res, 400, `Conversation message at index ${i} content cannot be empty`, ErrorCodes.EMPTY_MESSAGE_CONTENT);
             }
         }
     }
     
     next();
-};
-
-/**
- * Validate pairing code in request body
- */
-const validatePairingCode = (req, res, next) => {
-    const { pairingCode } = req.body;
-    
-    if (!pairingCode || typeof pairingCode !== 'string' || pairingCode.trim().length === 0) {
-        return sendError(res, 400, 'Pairing code is required', ErrorCodes.VALIDATION_ERROR, 'MISSING_PAIRING_CODE');
-    }
-    
-    // Pairing codes should be 6 digits
-    if (!/^\d{6}$/.test(pairingCode.trim())) {
-        return sendError(res, 400, 'Invalid pairing code format. Must be 6 digits', ErrorCodes.VALIDATION_ERROR, 'INVALID_PAIRING_CODE_FORMAT');
-    }
-    
-    next();
-};
+}
 
 module.exports = {
     validateAppleIDToken,
     validateMessage,
-    validateConversation,
-    validatePairingCode
+    validateConversation
 };
-
 

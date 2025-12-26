@@ -61,3 +61,5 @@ You can check Railway logs to see if data is being saved:
 3. Go to "Deployments" → Click latest deployment → "Logs"
 4. Look for "INSERT INTO users" or similar messages
 
+
+

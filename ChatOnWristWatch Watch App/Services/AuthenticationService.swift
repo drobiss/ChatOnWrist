@@ -187,6 +187,31 @@ class AuthenticationService: ObservableObject {
             deviceToken = storedDeviceToken
         }
     }
+
+    /// Ensure the watch has a valid device token. Attempts auto-pair if missing.
+    func ensureDeviceToken() async -> Bool {
+        if let deviceToken, !deviceToken.isEmpty {
+            return true
+        }
+
+        guard let userToken = userAccessToken else {
+            print("⌚️ ensureDeviceToken: missing user token")
+            return false
+        }
+
+        print("⌚️ ensureDeviceToken: auto-pairing watch device")
+        let result = await backendService.autoPairDevice(userToken: userToken, deviceType: "watch")
+        switch result {
+        case .success(let response):
+            deviceToken = response.deviceToken
+            keychain.save(key: "deviceToken", value: response.deviceToken)
+            print("✅ ensureDeviceToken: obtained device token")
+            return true
+        case .failure(let error):
+            print("❌ ensureDeviceToken failed: \(error.localizedDescription)")
+            return false
+        }
+    }
     
     func authenticateWithBackend(appleIDToken: String) async {
         await MainActor.run {

@@ -17,6 +17,9 @@ struct WatchChatView: View {
     @StateObject private var backendService = BackendService()
     @StateObject private var realtimeAudioService = RealtimeAudioService()
     @StateObject private var realtimeWebSocketService = RealtimeWebSocketService()
+    @StateObject private var realtimeHTTPService = RealtimeHTTPStreamService()
+    
+    @State private var useHTTPStreaming = true // Use HTTP by default on watchOS (WebSocket blocked)
     
     @State private var isProcessing = false
     @State private var hasProcessedInitialMessage = false
@@ -85,6 +88,20 @@ struct WatchChatView: View {
                             }
                             .padding(.vertical, 8)
                         }
+                        // Error message display
+                        if let errorMessage = (useHTTPStreaming ? realtimeHTTPService.errorMessage : realtimeWebSocketService.errorMessage) {
+                            VStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.orange)
+                                Text(errorMessage)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(WatchPalette.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 8)
+                            }
+                            .padding(.vertical, 8)
+                        }
                         
                         // Bottom padding for mic button
                         Spacer()
@@ -137,7 +154,11 @@ struct WatchChatView: View {
                     // Stop real-time voice
                     realtimeAudioService.stopRecording()
                     realtimeAudioService.stopPlayback()
-                    realtimeWebSocketService.disconnect()
+                    if useHTTPStreaming {
+                        realtimeHTTPService.disconnect()
+                    } else {
+                        realtimeWebSocketService.disconnect()
+                    }
                     dismiss()
                 }) {
                     Image(systemName: "xmark")
@@ -182,7 +203,11 @@ struct WatchChatView: View {
         }
         .onDisappear {
             // Disconnect real-time voice chat
-            realtimeWebSocketService.disconnect()
+            if useHTTPStreaming {
+                realtimeHTTPService.disconnect()
+            } else {
+                realtimeWebSocketService.disconnect()
+            }
             realtimeAudioService.stopRecording()
             realtimeAudioService.stopPlayback()
         }
@@ -238,6 +263,58 @@ struct WatchChatView: View {
         // Capture references for use in closures
         let store = conversationStore
         
+        if useHTTPStreaming {
+            setupHTTPStreamingCallbacks(store: store)
+        } else {
+            setupWebSocketCallbacks(store: store)
+        }
+    }
+    
+    private func setupHTTPStreamingCallbacks(store: ConversationStore) {
+        // Setup audio service callback for HTTP streaming
+        realtimeAudioService.onAudioChunk = { [weak realtimeHTTPService] audioData in
+            realtimeHTTPService?.sendAudioChunk(audioData)
+        }
+        
+        // Setup HTTP streaming callbacks
+        realtimeHTTPService.onAudioResponse = { [weak realtimeAudioService] audioData in
+            realtimeAudioService?.playAudioChunk(audioData)
+        }
+        
+        realtimeHTTPService.onTranscriptComplete = { text in
+            Task { @MainActor in
+                if let conversation = store.currentConversation, !text.isEmpty {
+                    let message = Message(content: text, isFromUser: false)
+                    store.addMessage(message, to: conversation)
+                }
+            }
+        }
+        
+        realtimeHTTPService.onResponseComplete = {
+            print("✅ Real-time response complete (HTTP)")
+            finalizeRealtimeSessionIfNeeded()
+        }
+        
+        realtimeHTTPService.onError = { error in
+            print("❌ Real-time voice error (HTTP): \(error)")
+            Task { @MainActor in
+                shouldDisconnectAfterResponse = false
+                realtimeAudioService.stopRecording()
+                realtimeAudioService.stopPlayback()
+            }
+        }
+        
+        realtimeHTTPService.onConversationStarted = { conversationId in
+            print("✅ Real-time conversation started (HTTP): \(conversationId)")
+        }
+        
+        realtimeHTTPService.onConversationEnded = {
+            print("🔚 Real-time conversation ended (HTTP)")
+            finalizeRealtimeSessionIfNeeded()
+        }
+    }
+    
+    private func setupWebSocketCallbacks(store: ConversationStore) {
         // Setup audio service callback
         realtimeAudioService.onAudioChunk = { [weak realtimeWebSocketService] audioData in
             realtimeWebSocketService?.sendAudioChunk(audioData)
@@ -258,24 +335,25 @@ struct WatchChatView: View {
         }
         
         realtimeWebSocketService.onResponseComplete = {
-            print("✅ Real-time response complete")
+            print("✅ Real-time response complete (WebSocket)")
             finalizeRealtimeSessionIfNeeded()
         }
         
         realtimeWebSocketService.onError = { error in
-            print("❌ Real-time voice error: \(error)")
-            shouldDisconnectAfterResponse = false
-            realtimeAudioService.stopRecording()
-            realtimeAudioService.stopPlayback()
-            realtimeWebSocketService.disconnect()
+            print("❌ Real-time voice error (WebSocket): \(error)")
+            Task { @MainActor in
+                shouldDisconnectAfterResponse = false
+                realtimeAudioService.stopRecording()
+                realtimeAudioService.stopPlayback()
+            }
         }
         
         realtimeWebSocketService.onConversationStarted = { conversationId in
-            print("✅ Real-time conversation started: \(conversationId)")
+            print("✅ Real-time conversation started (WebSocket): \(conversationId)")
         }
         
         realtimeWebSocketService.onConversationEnded = {
-            print("🔚 Real-time conversation ended")
+            print("🔚 Real-time conversation ended (WebSocket)")
             finalizeRealtimeSessionIfNeeded()
         }
     }
@@ -292,15 +370,51 @@ struct WatchChatView: View {
     }
     
     private func startRealtimeVoice() {
+        Task { @MainActor in
+            await startRealtimeVoiceAsync()
+        }
+    }
+
+    @MainActor
+    private func startRealtimeVoiceAsync() async {
         print("🎤 startRealtimeVoice called")
         shouldDisconnectAfterResponse = false
+
+        // Ensure we have a device token (auto-pair if missing)
+        if authService.deviceToken == nil || authService.deviceToken?.isEmpty == true {
+            print("❌ No device token on watch, attempting auto-pair before starting voice")
+            isProcessing = true
+            let paired = await authService.ensureDeviceToken()
+            isProcessing = false
+
+            guard paired, let refreshedToken = authService.deviceToken, !refreshedToken.isEmpty else {
+                print("❌ Cannot start real-time voice: device not paired")
+                Task { @MainActor in
+                    realtimeWebSocketService.errorMessage = "Device not paired. Please ensure iPhone app is running and signed in."
+                }
+                return
+            }
+            print("✅ Device token obtained after auto-pair: \(refreshedToken.prefix(20))...")
+        }
+
         guard let deviceToken = authService.deviceToken, !deviceToken.isEmpty else {
-            print("❌ Cannot start real-time voice: device not paired")
-            print("   Please sign in and pair your device first")
+            Task { @MainActor in
+                realtimeWebSocketService.errorMessage = "No device token available"
+            }
             return
         }
+        print("✅ Device token ready: \(deviceToken.prefix(20))...")
         
-        print("✅ Device token found: \(deviceToken.prefix(20))...")
+        #if os(watchOS)
+        // Clear any previous errors before attempting connection
+        realtimeWebSocketService.errorMessage = nil
+        print("⌚️ WatchOS: Starting WebSocket connection - Watch needs direct WiFi/cellular (not iPhone proxy)")
+        
+        // Test regular HTTPS connectivity first
+        Task {
+            await testHTTPSConnectivity()
+        }
+        #endif
         
         guard let conversation = conversationStore.currentConversation else {
             print("⚠️ No conversation available, creating new one")
@@ -314,6 +428,114 @@ struct WatchChatView: View {
             
             print("🔌 Connecting WebSocket for conversation: \(newConversation.id.uuidString)")
             
+            if useHTTPStreaming {
+                // Set up callback for when HTTP stream connects
+                let originalOnConnected = realtimeHTTPService.onConversationStarted
+                realtimeHTTPService.onConversationStarted = { convId in
+                    originalOnConnected?(convId)
+                    print("✅ HTTP stream connected, starting recording...")
+                    
+                    // Setup playback
+                    realtimeAudioService.setupPlayback()
+                    
+                    // Start recording
+                    realtimeAudioService.startRecording()
+                    
+                    #if os(watchOS)
+                    WKInterfaceDevice.current().play(.start)
+                    #endif
+                }
+                
+                // Set up error handler
+                realtimeHTTPService.onError = { error in
+                    print("❌ HTTP stream error: \(error)")
+                    // Don't start recording on error
+                }
+                
+                // Connect HTTP stream
+                realtimeHTTPService.connect(
+                    deviceToken: deviceToken,
+                    conversationId: newConversation.id.uuidString,
+                    conversationHistory: history
+                )
+            } else {
+                // Set up callback for when WebSocket connects
+                let originalOnConnected = realtimeWebSocketService.onConversationStarted
+                realtimeWebSocketService.onConversationStarted = { convId in
+                    originalOnConnected?(convId)
+                    print("✅ WebSocket connected, starting recording...")
+                    
+                    // Setup playback
+                    realtimeAudioService.setupPlayback()
+                    
+                    // Start recording
+                    realtimeAudioService.startRecording()
+                    
+                    #if os(watchOS)
+                    WKInterfaceDevice.current().play(.start)
+                    #endif
+                }
+                
+                // Set up error handler
+                realtimeWebSocketService.onError = { error in
+                    print("❌ WebSocket error: \(error)")
+                    // Don't start recording on error
+                }
+                
+                // Connect WebSocket
+                realtimeWebSocketService.connect(
+                    deviceToken: deviceToken,
+                    conversationId: newConversation.id.uuidString,
+                    conversationHistory: history
+                )
+            }
+            return
+        }
+        
+        print("✅ Conversation found: \(conversation.id.uuidString)")
+        
+        // Prepare conversation history
+        let history = conversation.messages.map { msg in
+            [
+                "role": msg.isFromUser ? "user" : "assistant",
+                "content": msg.content
+            ]
+        }
+        
+        let streamType = useHTTPStreaming ? "HTTP stream" : "WebSocket"
+        print("🔌 Connecting \(streamType) with \(history.count) history messages")
+        
+        if useHTTPStreaming {
+            // Set up callback for when HTTP stream connects
+            let originalOnConnected = realtimeHTTPService.onConversationStarted
+            realtimeHTTPService.onConversationStarted = { convId in
+                originalOnConnected?(convId)
+                print("✅ HTTP stream connected, starting recording...")
+                
+                // Setup playback
+                realtimeAudioService.setupPlayback()
+                
+                // Start recording
+                realtimeAudioService.startRecording()
+                
+                #if os(watchOS)
+                WKInterfaceDevice.current().play(.start)
+                #endif
+            }
+            
+            // Set up error handler
+            realtimeHTTPService.onError = { error in
+                print("❌ HTTP stream error: \(error)")
+                // Don't start recording on error
+            }
+            
+            // Connect HTTP stream
+            realtimeHTTPService.connect(
+                deviceToken: deviceToken,
+                conversationId: conversation.id.uuidString,
+                conversationHistory: history
+            )
+        } else {
             // Set up callback for when WebSocket connects
             let originalOnConnected = realtimeWebSocketService.onConversationStarted
             realtimeWebSocketService.onConversationStarted = { convId in
@@ -340,59 +562,21 @@ struct WatchChatView: View {
             // Connect WebSocket
             realtimeWebSocketService.connect(
                 deviceToken: deviceToken,
-                conversationId: newConversation.id.uuidString,
+                conversationId: conversation.id.uuidString,
                 conversationHistory: history
             )
-            return
         }
-        
-        print("✅ Conversation found: \(conversation.id.uuidString)")
-        
-        // Prepare conversation history
-        let history = conversation.messages.map { msg in
-            [
-                "role": msg.isFromUser ? "user" : "assistant",
-                "content": msg.content
-            ]
-        }
-        
-        print("🔌 Connecting WebSocket with \(history.count) history messages")
-        
-        // Set up callback for when WebSocket connects
-        let originalOnConnected = realtimeWebSocketService.onConversationStarted
-        realtimeWebSocketService.onConversationStarted = { convId in
-            originalOnConnected?(convId)
-            print("✅ WebSocket connected, starting recording...")
-            
-            // Setup playback
-            realtimeAudioService.setupPlayback()
-            
-            // Start recording
-            realtimeAudioService.startRecording()
-            
-            #if os(watchOS)
-            WKInterfaceDevice.current().play(.start)
-            #endif
-        }
-        
-        // Set up error handler
-        realtimeWebSocketService.onError = { error in
-            print("❌ WebSocket error: \(error)")
-            // Don't start recording on error
-        }
-        
-        // Connect WebSocket
-        realtimeWebSocketService.connect(
-            deviceToken: deviceToken,
-            conversationId: conversation.id.uuidString,
-            conversationHistory: history
-        )
     }
     
     private func stopRealtimeVoice() {
         shouldDisconnectAfterResponse = true
         realtimeAudioService.stopRecording()
-        realtimeWebSocketService.endConversation()
+        
+        if useHTTPStreaming {
+            realtimeHTTPService.endConversation()
+        } else {
+            realtimeWebSocketService.endConversation()
+        }
         
         #if os(watchOS)
         WKInterfaceDevice.current().play(.stop)
@@ -412,8 +596,33 @@ struct WatchChatView: View {
         shouldDisconnectAfterResponse = false
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            realtimeWebSocketService.disconnect()
+            if useHTTPStreaming {
+                realtimeHTTPService.disconnect()
+            } else {
+                realtimeWebSocketService.disconnect()
+            }
             realtimeAudioService.stopPlayback()
+        }
+    }
+    
+    // MARK: - Network Testing
+    
+    private func testHTTPSConnectivity() async {
+        print("🔍 Testing HTTPS connectivity to backend...")
+        guard let url = URL(string: "https://chatonwrist-production-79ac.up.railway.app/health") else {
+            print("❌ Invalid test URL")
+            return
+        }
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(from: url)
+            if let httpResponse = response as? HTTPURLResponse {
+                print("✅ HTTPS test successful! Status: \(httpResponse.statusCode)")
+                print("✅ Regular HTTPS works - WebSocket block is watchOS-specific")
+            }
+        } catch {
+            print("❌ HTTPS test failed: \(error.localizedDescription)")
+            print("❌ Watch cannot reach backend at all - network issue")
         }
     }
     
